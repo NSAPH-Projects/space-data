@@ -1,0 +1,25 @@
+defaults:
+  - _self_
+  - data:
+
+data:
+  path: ???
+  confounder: null
+  outcome: ???
+  treaments: ???
+  index_col: null # can overwrite
+  continuous: ???  # if false, then assumed discrete
+
+  scaling:  # scaling done before transforms
+    outcome:  # unit, standard
+    treatment:  # unit, standard
+
+  transforms:
+    outcome:   # log, symlog, logit
+    treatment:   # log, symlog, logit
+
+
+training: # currently empty but here we can specify opts to pass to autogluon
+continuous_treatment_bins: 100
+
+num_plot_samples: 50
