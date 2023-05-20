@@ -8,7 +8,7 @@ data:
   outcome: ???
   treaments: ???
   index_col: null # can overwrite
-  continuous: ???  # if false, then assumed discrete
+  treatment_bins: ???  # if false, then assumed discrete
 
   scaling:  # scaling done before transforms
     outcome:  # unit, standard
@@ -22,6 +22,5 @@ autogluon:
   fit:
     presets: medium_quality
 
-continuous_treatment_bins: 100
 num_plot_samples: 50
 seed: 42
