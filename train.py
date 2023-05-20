@@ -35,7 +35,8 @@ def main(cfg: DictConfig):
         df[varname] = transform_variable(df[varname].values, transform)
 
     # train
-    predictor = TabularPredictor(label=data.outcome).fit(train_data)
+    trainer = TabularPredictor(label=data.outcome)
+    predictor = trainer.fit(train_data, **cfg.autogluon.fit)
     feature_importance = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     Ysynth = predictor.predict(df)

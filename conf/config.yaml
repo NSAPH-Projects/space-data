@@ -18,8 +18,10 @@ data:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
 
+autogluon:
+  fit:
+    presets: medium_quality
 
-training: # currently empty but here we can specify opts to pass to autogluon
 continuous_treatment_bins: 100
-
 num_plot_samples: 50
+seed: 42
