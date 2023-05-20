@@ -2,6 +2,3 @@
 outputs
 **/.DS_Store
 **/__pycache__
-
-# do not upload data unless it is small
-data
