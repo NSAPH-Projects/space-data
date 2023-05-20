@@ -1,0 +1,7 @@
+path: elections/counties_election.csv
+outcome: election_dem_pct
+index_col: 0
+treatment: cdc_suicides
+treatment_bins: 100  
+transforms:
+  treatment: log
