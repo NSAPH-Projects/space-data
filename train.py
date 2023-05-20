@@ -57,7 +57,6 @@ def main(cfg: DictConfig):
     Ycf.columns = [f"{data.outcome}_{i:02d}" for i in range(len(Ycf.columns))]
 
     # save fit results
-    Ycf.to_csv("counterfactuals.csv")
     X = df[df.columns.difference([data.outcome, data.treatment])]
     dfout = pd.concat([A, X, Ysynth, Ycf], axis=1)
     dfout.to_csv("synthetic_data.csv")
