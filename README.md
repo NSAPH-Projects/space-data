@@ -1,4 +1,4 @@
-# SpaCE Training 🌎💪🏋️‍♀️
+# SpaCE Data 🌎💪🏋️‍♀️
 
 ## Install prerequisites
 ```
