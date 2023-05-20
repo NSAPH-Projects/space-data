@@ -16,6 +16,10 @@ from utils import transform_variable, scale_variable
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig):
+    # set seed
+    seed_everything(cfg.seed)
+
+    # load data
     datadir = get_original_cwd() + "/data"
     data = cfg.data
     df = pd.read_csv(f"{datadir}/{data.path}", index_col=data.index_col)
@@ -25,7 +29,7 @@ def main(cfg: DictConfig):
     dftrain = df[~np.isnan(df[data.outcome])]
     train_data = TabularDataset(dftrain)
 
-    # get treatmetn and outcome and
+    # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     for tgt in ["treatment", "outcome"]:
         scaling = getattr(data.scaling, tgt)
@@ -39,26 +43,26 @@ def main(cfg: DictConfig):
     predictor = trainer.fit(train_data, **cfg.autogluon.fit)
     feature_importance = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
-    Ysynth = predictor.predict(df)
+    mu_synth = predictor.predict(df)
 
     # get counterfactual treatments and predictions
     A = df[data.treatment]
     amin, amax = np.nanmin(A), np.nanmax(A)
-    avals = np.linspace(amin, amax, cfg.continuous_treatment_bins)
+    avals = np.linspace(amin, amax, cfg.treatment_bins)
 
-    Ycf = []
+    mu_cf = []
     for a in avals:
         cfdata = df.copy()
         cfdata[data.treatment] = a
         cfdata = TabularDataset(cfdata)
         predicted = predictor.predict(cfdata)
-        Ycf.append(predicted)
-    Ycf = pd.concat(Ycf, axis=1)
-    Ycf.columns = [f"{data.outcome}_{i:02d}" for i in range(len(Ycf.columns))]
+        mu_cf.append(predicted)
+    mu_cf = pd.concat(mu_cf, axis=1)
+    mu_cf.columns = [f"{data.outcome}_{i:02d}" for i in range(len(mu_cf.columns))]
 
     # save fit results
     X = df[df.columns.difference([data.outcome, data.treatment])]
-    dfout = pd.concat([A, X, Ysynth, Ycf], axis=1)
+    dfout = pd.concat([A, X, mu_synth, mu_cf], axis=1)
     dfout.to_csv("synthetic_data.csv")
 
     metadata = {
@@ -74,10 +78,10 @@ def main(cfg: DictConfig):
 
     # plot potential outcome curves
     ix = np.random.choice(len(df), cfg.num_plot_samples)
-    cfpred_sample = Ycf.iloc[ix].values
+    cfpred_sample = mu_cf.iloc[ix].values
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
-    ax.scatter(A.iloc[ix], df[data.outcome].iloc[ix], color="red")
+    ax.scatter(A.iloc[ix], mu_synth.iloc[ix], color="red")
     ax.set_xlabel(data.treatment)
     ax.set_ylabel(data.outcome)
     ax.set_title("Counterfactuals")
@@ -86,5 +90,4 @@ def main(cfg: DictConfig):
 
 if __name__ == "__main__":
     matplotlib.use("Agg")
-    seed_everything(42)
     main()
