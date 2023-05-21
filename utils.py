@@ -1,7 +1,12 @@
 from typing import Literal
 import numpy as np
+import pandas as pd
 import networkx as nx
 from scipy.linalg import cholesky, solve_triangular
+import logging
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def scale_variable(
@@ -38,13 +43,19 @@ def transform_variable(
             raise ValueError(f"Unknown transform: {transform}")
 
 
-def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
-    """Computes the BIC of a quadratic Gaussian model"""
+def __find_best_gmrf_params(
+    x: np.ndarray, graph: nx.Graph, a: float = 1.1, b: float = 1.1
+) -> np.ndarray:
+    """Select the best param using the penalized likelihood loss of a
+    spatial GMLRF smoothing model. a,b are the parameters of an inverse gamma"""
     lams = 10 ** np.linspace(-3, 3, 20)
-    e1 = np.array([e[0] for e in graph.edges])
-    e2 = np.array([e[1] for e in graph.edges])
+    nodelist = np.array(graph.nodes)
+    node2ix = {n: i for i, n in enumerate(nodelist)}
+    e1 = np.array([node2ix[e[0]] for e in graph.edges])
+    e2 = np.array([node2ix[e[1]] for e in graph.edges])
     L = nx.laplacian_matrix(graph).toarray()
 
+    # solves the optiization problem argmin ||beta - x||^2 + lam * beta^T L beta
     def solve(x, lam, L):
         Q = lam * L.copy()
         Q[np.diag_indices_from(Q)] += 1
@@ -53,45 +64,48 @@ def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
         beta = solve_triangular(L.T, z)
         return beta
 
-    losses = []
+    losses = {}
     for lam in lams:
         # TODO: use sparse matrix/ugly dependencies
         beta = solve(x, lam, L)
         sig = np.std(x - beta)
 
         # compute loss assuming x ~ N(beta, sig**2)
-        n = len(x)
-        ll_loss = 0.5 * ((x - beta) / sig) ** 2 + n * np.log(2 * np.pi * (sig**2)) / 2
+        y_loss = 0.5 * ((x - beta) / sig) ** 2 + np.log(sig)
 
         # diffs ~ N(0, sig**2 / lam)
-        diffs = beta[e1] - beta[e2]
-        sigb = sig / np.sqrt(lam)
-        m = len(diffs)
-        prior_loss = 0.5 * (diffs / sigb) ** 2 + m * np.log(2 * np.pi * (sigb**2)) / 2
+        diff_loss = 0.5 * lam * (beta[e1] - beta[e2]) ** 2 - 0.5 * np.log(lam)
 
-        losses.append(ll_loss + prior_loss)
+        # penalty  lam ~ exp(-lam), sig2 ~ invgamma(1.1, 1.1)
+        prec = 1 / sig**2
+        penalty_loss = lam + b * prec - (a + 1) * np.log(prec)
 
-    best_lam = lams[np.argmin(losses)]
-    best_beta = solve(x, best_lam, L)
-    best_sig = np.std(x - best_beta)
+        # total_loss
+        losses[lam] = y_loss.sum() + diff_loss.sum() + penalty_loss
 
-    return best_lam, best_sig
+    best_lam = min(lams, key=lambda l: losses[l])
+
+    LOGGER.info(f"Best lambda: {best_lam:.4f}")
+    losses_ = {np.round(k, 4): np.round(v, 4) for k, v in losses.items()}
+    LOGGER.info(f"Losses: {losses_}")
+
+    return best_lam
 
 
-def generate_noise_like(residuals: np.ndarray, graph: nx.Graph, lam: float) -> np.ndarray:
+def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     """Injects noise into residuals using a Gaussian Markov Random Field."""
-    # find lambda value
-    res_sig = np.nanstd(residuals)
-    res_standard = residuals / res_sig
-    best_lam, best_sig = __find_best_gmrf_params(res_standard, graph)
+    # find best smoothness param from penalized likelihood
+    res_sig = np.nanstd(x)
+    res_standard = x / res_sig
+    res_graph = nx.subgraph(graph, x.index)
+    best_lam = __find_best_gmrf_params(res_standard, res_graph)
 
     # make spatial noise from GMRF
-    Q = lam * nx.laplacian_matrix(graph).toarray()
-    Z = np.random.normal(size=(Q.shape[0], len(residuals)))
+    Q = best_lam * nx.laplacian_matrix(graph).toarray()
+    Q[np.diag_indices_from(Q)] += 1
+    Z = np.random.randn(Q.shape[0])
     L = cholesky(Q, lower=True)
-    spatial_noise = solve_triangular(L, Z, lower=True).T
-    hetero_noise = np.random.normal(size=len(residuals)) * best_sig
-    noise = (spatial_noise + hetero_noise) * res_sig
+    noise = solve_triangular(L, Z, lower=True).T
+    noise = noise / noise.std() * res_sig
 
-    # solve for beta
-    return residuals + noise
+    return noise

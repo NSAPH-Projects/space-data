@@ -1,4 +1,4 @@
-path: data/counties_election.csv
+data_path: data/counties_election.csv
 base_name: elect
 outcome: election_dem_pct
 index_col: 0

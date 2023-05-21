@@ -1,38 +1,48 @@
 from omegaconf import DictConfig
-
+from hydra.utils import get_original_cwd
+import yaml
+import hydra
 import numpy as np
 import pandas as pd
 import networkx as nx
-import matplotlib
 import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 from autogluon.tabular import TabularDataset, TabularPredictor
-import yaml
-
-import shutil
-
-import hydra
-from hydra.utils import get_original_cwd
 
 from utils import transform_variable, scale_variable, generate_noise_like
 
+
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig):
-    '''
+    """
     Trains a model using AutoGluon and save the results.
-    '''
-    
+    """
+
     # set seed
     seed_everything(cfg.seed)
 
     # load data
     owd = get_original_cwd()
-    df = pd.read_csv(f"{owd}/{cfg.data.path}", index_col=cfg.data.index_col)
+    df_read_opts = {}
+    if cfg.data.index_col is not None:
+        df_read_opts["index_col"] = cfg.data.index_col
+        df_read_opts["dtype"] = {cfg.data.index_col: str}
+    df = pd.read_csv(f"{owd}/{cfg.data.data_path}", **df_read_opts)
     df = df[df[cfg.data.treatment].notna()]
 
+    # read graphml
+    graph = nx.read_graphml(f"{owd}/{cfg.data.graph_path}")
+
     # test with a subset of the data
-    ix = np.random.choice(len(df), 100)
-    df = df.iloc[ix]
+    if cfg.debug_subsample is not None:
+        n = cfg.debug_subsample
+        ix = np.random.choice(n, 100, replace=False)
+        df = df.iloc[ix]
+
+    # keep intersectio of nodes in graph and data
+    intersection = set(df.index).intersection(set(graph.nodes))
+    graph = nx.subgraph(graph, intersection)
+    df = df.loc[intersection]
 
     # remove nans from training data
     dftrain = df[~np.isnan(df[cfg.data.outcome])]
@@ -52,19 +62,21 @@ def main(cfg: DictConfig):
     predictor = trainer.fit(train_data, **cfg.autogluon.fit)
     feature_importance = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
-    mu_synth = predictor.predict(df)
+    mu = predictor.predict(df)
+    mu.name = mu.name + "_pred"
 
-    # read graphml
-    graph = nx.read_graphml(f"{owd}/{cfg.data.graphml}")
-
-    # compute easy noise model with CAR
-    residuals = df[cfg.data.outcome] - mu_synth
-    graph_laplacian = nx.laplacian_matrix(graph).toarray()
+    # inject noise
+    fit_residuals = dftrain[cfg.data.outcome] - predictor.predict(train_data)
+    synth_residuals = generate_noise_like(fit_residuals, graph)
+    Y_synth = predictor.predict(df) + synth_residuals
+    Y_synth.name = "Y_synth"
 
     # get counterfactual treatments and predictions
     A = df[cfg.data.treatment]
     amin, amax = np.nanmin(A), np.nanmax(A)
-    avals = np.linspace(amin, amax, cfg.data.treatment_bins)
+    n_treatment_values = len(np.unique(A))
+    n_bins = min(cfg.data.treatment_max_bins, n_treatment_values)
+    avals = np.linspace(amin, amax, n_bins)
 
     mu_cf = []
     for a in avals:
@@ -74,43 +86,57 @@ def main(cfg: DictConfig):
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
     mu_cf = pd.concat(mu_cf, axis=1)
-    mu_cf.columns = [f"{cfg.data.outcome}_{i:02d}" for i in range(len(mu_cf.columns))]
+    mu_cf.columns = [f"{cfg.data.outcome}_pred_{i:02d}" for i in range(len(mu_cf.columns))]
+    Y_cf = mu_cf + synth_residuals[:, None]
+    Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
     # save fit results
     X = df[df.columns.difference([cfg.data.outcome, cfg.data.treatment])]
-    dfout = pd.concat([A, X, mu_synth, mu_cf], axis=1)
-    dfout.to_csv("synthetic_cfg.data.csv")
+    dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
+    dfout.to_csv("synthetic_data.csv")
 
     # save metadata
-    name_prefix = "spaceb" if data.treatment_bins == 2 else "spacec"
+    name_prefix = "spaceb" if n_bins == 2 else "spacec"
     metadata = {
         "name": f"{name_prefix}_{cfg.data.base_name}_{cfg.data.treatment}_{cfg.data.outcome}",
         "treatment": cfg.data.treatment,
         "predicted_outcome": cfg.data.outcome,
-        "treatment": cfg.data.treatment,
-        "synthetic_outcome": cfg.data.outcome,
+        "synthetic_outcome": "Y_synth",
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
         "feature_importance": feature_importance.importance.to_dict(),
     }
-    with open("metacfg.data.yaml", "w") as f:
+    with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f)
-    
-    # Copy graph
-    shutil.copy(f"{datadir}/{data.graph_path}", "graph.graphml")
-    # Print leaderboard
+
+    # save leaderboard
     results["leaderboard"].to_csv("leaderboard.csv", index=False)
+
     # plot potential outcome curves
     ix = np.random.choice(len(df), cfg.num_plot_samples)
     cfpred_sample = mu_cf.iloc[ix].values
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
-    ax.scatter(A.iloc[ix], mu_synth.iloc[ix], color="red")
+    ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
     ax.set_xlabel(cfg.data.treatment)
     ax.set_ylabel(cfg.data.outcome)
     ax.set_title("Counterfactuals")
-    fig.savefig("counterfactuals.png", dpi=300)
+    fig.savefig("counterfactuals.png", dpi=300, bbox_inches="tight")
+
+    # plot histogram of true vs synthetic residuals
+    # normalize density to 1
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.hist(fit_residuals, bins=20, density=True, alpha=0.5, label="True")
+    ax.hist(synth_residuals, bins=20, density=True, alpha=0.5, label="Synthetic")
+    ax.set_xlabel("Residuals")
+    ax.set_ylabel("Density")
+    ax.set_title("Residuals")
+    ax.legend()
+    fig.savefig("residuals.png", dpi=300, bbox_inches="tight")
+
+    # Save graph
+    nx.write_graphml(graph, "graph.graphml")
+
 
 if __name__ == "__main__":
-    matplotlib.use("Agg")
     main()
