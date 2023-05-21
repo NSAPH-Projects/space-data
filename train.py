@@ -2,6 +2,7 @@ from omegaconf import DictConfig
 
 import numpy as np
 import pandas as pd
+import networkx as nx
 import matplotlib
 import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
@@ -11,7 +12,7 @@ import yaml
 import hydra
 from hydra.utils import get_original_cwd
 
-from utils import transform_variable, scale_variable
+from utils import transform_variable, scale_variable, generate_noise_like
 
 
 @hydra.main(config_path="conf", config_name="config")
@@ -20,9 +21,13 @@ def main(cfg: DictConfig):
     seed_everything(cfg.seed)
 
     # load data
-    datadir = get_original_cwd() + "/data"
-    df = pd.read_csv(f"{datadir}/{cfg.data.path}", index_col=cfg.data.index_col)
+    owd = get_original_cwd()
+    df = pd.read_csv(f"{owd}/{cfg.data.path}", index_col=cfg.data.index_col)
     df = df[df[cfg.data.treatment].notna()]
+
+    # test with a subset of the data
+    ix = np.random.choice(len(df), 100)
+    df = df.iloc[ix]
 
     # remove nans from training data
     dftrain = df[~np.isnan(df[cfg.data.outcome])]
@@ -43,6 +48,13 @@ def main(cfg: DictConfig):
     feature_importance = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     mu_synth = predictor.predict(df)
+
+    # read graphml
+    graph = nx.read_graphml(f"{owd}/{cfg.data.graphml}")
+
+    # compute easy noise model with CAR
+    residuals = df[cfg.data.outcome] - mu_synth
+    graph_laplacian = nx.laplacian_matrix(graph).toarray()
 
     # get counterfactual treatments and predictions
     A = df[cfg.data.treatment]

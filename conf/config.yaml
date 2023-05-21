@@ -8,7 +8,7 @@ data:
   outcome: ???
   treaments: ???
   index_col: null # can overwrite
-  treatment_bins: ???  # if 2, then assumed binary
+  treatment_max_bins: 100  # for binary bins will be 2
   graph_path: ???
   has_coordinates: ???
 

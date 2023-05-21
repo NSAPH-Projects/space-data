@@ -1,9 +1,7 @@
-path: counties_election.csv
+path: data/counties_election.csv
 outcome: election_dem_pct
 index_col: 0
-treatment: cdc_suicides
-treatment_bins: 100  
-transforms:
-  treatment: log
-graph_path: counties.graphml
-has_coordinates: TRUE
+treatment: cs_ed_above_college
+masked_spatial_confounder: avg_income
+graph_path: data/counties.graphml
+has_coordinates: true
