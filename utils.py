@@ -106,3 +106,29 @@ def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     noise = noise / noise.std() * res_sig
 
     return noise
+
+
+def moran_I(x: pd.Series, A: np.ndarray) -> float:
+    # Get the adjacency graph corresponding to the index of x
+    x = x.values
+
+    # input the mean of x when there nan values
+    x[np.isnan(x)] = np.nanmean(x)
+    
+    # Compute mean of attribute values
+    x_bar = np.mean(x)
+    
+    # Subtract mean from attribute values
+    x_diff = x - x_bar
+
+    # Compute denominator: sum of squared differences from mean
+    denominator = np.sum(x_diff ** 2) + 1e-8
+
+    # Compute numerator: sum of product of weight and pair differences from mean
+    # Matrix multiplication to achieve vectorization
+    numerator = np.sum(A * np.outer(x_diff, x_diff))
+
+    # Compute Moran's I
+    I = len(x) / np.sum(A) * (numerator / denominator)
+    
+    return float(I)
