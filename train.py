@@ -8,14 +8,19 @@ from pytorch_lightning import seed_everything
 from autogluon.tabular import TabularDataset, TabularPredictor
 import yaml
 
+import shutil
+
 import hydra
 from hydra.utils import get_original_cwd
 
 from utils import transform_variable, scale_variable
 
-
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig):
+    '''
+    Trains a model using AutoGluon and save the results.
+    '''
+    
     # set seed
     seed_everything(cfg.seed)
 
@@ -65,17 +70,23 @@ def main(cfg: DictConfig):
     dfout = pd.concat([A, X, mu_synth, mu_cf], axis=1)
     dfout.to_csv("synthetic_data.csv")
 
+    # save metadata
+    name_prefix = "spaceb" if data.treatment_bins == 2 else "spacec"
     metadata = {
+        "name": f"{name_prefix}_{data.base_name}_{data.treatment}_{data.outcome}",
         "treatment": data.treatment,
-        "synthetic_outcome": data.outcome,
+        "predicted_outcome": data.outcome,
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
         "feature_importance": feature_importance.importance.to_dict(),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f)
+    
+    # Copy graph
+    shutil.copy(f"{datadir}/{data.graph_path}", "graph.graphml")
+    # Print leaderboard
     results["leaderboard"].to_csv("leaderboard.csv", index=False)
-
     # plot potential outcome curves
     ix = np.random.choice(len(df), cfg.num_plot_samples)
     cfpred_sample = mu_cf.iloc[ix].values
@@ -86,7 +97,6 @@ def main(cfg: DictConfig):
     ax.set_ylabel(data.outcome)
     ax.set_title("Counterfactuals")
     fig.savefig("counterfactuals.png", dpi=300)
-
 
 if __name__ == "__main__":
     matplotlib.use("Agg")
