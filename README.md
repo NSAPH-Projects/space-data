@@ -3,7 +3,7 @@
 ## Install prerequisites
 ```
 conda env create -f requirements.yaml
-conda activate spacetrain
+conda activate spacedata
 ```
 
 ## Run code
