@@ -3,6 +3,7 @@ defaults:
   - data:
 
 data:
+  base_name: ???
   path: ???
   confounder: null
   outcome: ???
