@@ -43,12 +43,10 @@ def transform_variable(
             raise ValueError(f"Unknown transform: {transform}")
 
 
-def __find_best_gmrf_params(
-    x: np.ndarray, graph: nx.Graph, a: float = 1.1, b: float = 1.1
-) -> np.ndarray:
+def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
     """Select the best param using the penalized likelihood loss of a
-    spatial GMLRF smoothing model. a,b are the parameters of an inverse gamma"""
-    lams = 10 ** np.linspace(-3, 3, 20)
+    spatial GMLRF smoothing model."""
+    lams = 10 ** np.linspace(-3, 1, 20)
     nodelist = np.array(graph.nodes)
     node2ix = {n: i for i, n in enumerate(nodelist)}
     e1 = np.array([node2ix[e[0]] for e in graph.edges])
@@ -65,20 +63,19 @@ def __find_best_gmrf_params(
         return beta
 
     losses = {}
-    for lam in lams:
+    for lam in reversed(lams):
         # TODO: use sparse matrix/ugly dependencies
         beta = solve(x, lam, L)
         sig = np.std(x - beta)
 
         # compute loss assuming x ~ N(beta, sig**2)
-        y_loss = 0.5 * ((x - beta) / sig) ** 2 + np.log(sig)
+        y_loss = 0.5 * ((x.values - beta) / sig) ** 2 + np.log(sig)
 
         # diffs ~ N(0, sig**2 / lam)
-        diff_loss = 0.5 * lam * (beta[e1] - beta[e2]) ** 2 - 0.5 * np.log(lam)
+        l = (lam / sig**2)
+        diff_loss = 0.5 * l * (beta[e1] - beta[e2]) ** 2 - 0.5 * np.log(l)
 
-        # penalty  lam ~ exp(-lam), sig2 ~ invgamma(1.1, 1.1)
-        prec = 1 / sig**2
-        penalty_loss = lam + b * prec - (a + 1) * np.log(prec)
+        penalty_loss = len(e1) * l + (1 / sig**2)
 
         # total_loss
         losses[lam] = y_loss.sum() + diff_loss.sum() + penalty_loss
