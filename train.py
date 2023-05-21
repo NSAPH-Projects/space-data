@@ -1,5 +1,6 @@
 from omegaconf import DictConfig
 from hydra.utils import get_original_cwd
+import logging
 import yaml
 import hydra
 import numpy as np
@@ -11,17 +12,20 @@ from autogluon.tabular import TabularDataset, TabularPredictor
 
 from utils import transform_variable, scale_variable, generate_noise_like
 
+logger = logging.getLogger(__name__)
+
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg: DictConfig):
     """
     Trains a model using AutoGluon and save the results.
     """
-
+    # === Data preparation ===
     # set seed
     seed_everything(cfg.seed)
 
     # load data
+    logger.info(f"Loading data from {cfg.data.data_path}")
     owd = get_original_cwd()
     df_read_opts = {}
     if cfg.data.index_col is not None:
@@ -31,6 +35,7 @@ def main(cfg: DictConfig):
     df = df[df[cfg.data.treatment].notna()]
 
     # read graphml
+    logger.info(f"Reading graph from {cfg.data.graph_path}")
     graph = nx.read_graphml(f"{owd}/{cfg.data.graph_path}")
 
     # test with a subset of the data
@@ -41,6 +46,9 @@ def main(cfg: DictConfig):
 
     # keep intersectio of nodes in graph and data
     intersection = set(df.index).intersection(set(graph.nodes))
+    perc = 100 * len(intersection) / len(df)
+    logger.info(f"Homegenizing data and graph")
+    logger.info(f"...{perc:.2f}% of the data rows found in graph nodes.")
     graph = nx.subgraph(graph, intersection)
     df = df.loc[intersection]
 
@@ -50,28 +58,50 @@ def main(cfg: DictConfig):
 
     # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
+    logger.info(f"Transforming data.")
     for tgt in ["treatment", "outcome"]:
         scaling = getattr(cfg.data.scaling, tgt)
         transform = getattr(cfg.data.transforms, tgt)
         varname = getattr(cfg.data, tgt)
-        df[varname] = scale_variable(df[varname].values, scaling)
-        df[varname] = transform_variable(df[varname].values, transform)
+        if scaling is not None:
+            logger.info(f"Scaling {varname} with {scaling}")
+            df[varname] = scale_variable(df[varname].values, scaling)
+        if transform is not None:
+            logger.info(f"Transforming {varname} with {transform}")
+            df[varname] = transform_variable(df[varname].values, transform)
 
-    # train
+    # === Model fitting ===
+    logger.info(f"Fitting model to outcome variable.")
     trainer = TabularPredictor(label=cfg.data.outcome)
     predictor = trainer.fit(train_data, **cfg.autogluon.fit)
-    feature_importance = predictor.feature_importance(train_data)
+    featimp = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
 
     # inject noise
+    logger.info(f"Generating synthetic residuals for synthetic outcome.")
     fit_residuals = dftrain[cfg.data.outcome] - predictor.predict(train_data)
     synth_residuals = generate_noise_like(fit_residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
 
-    # get counterfactual treatments and predictions
+    logger.info(f"Fitting model to treatment variable for confounding score.")
+    treatment_trainer = TabularPredictor(label=cfg.data.treatment)
+    treatment_train_data = TabularDataset(
+        dftrain[dftrain.columns.difference([cfg.data.outcome])]
+    )
+    treatment_predictor = treatment_trainer.fit(
+        treatment_train_data, **cfg.autogluon.fit
+    )
+    treatment_featimp = treatment_predictor.feature_importance(treatment_train_data)
+    outcome_featimp = featimp.loc[treatment_featimp.index]
+    confounding_score = np.minimum(
+        outcome_featimp.importance, treatment_featimp.importance
+    )
+
+    # === Counterfactual generation ===
+    logger.info(f"Generating counterfactual predictions and adding residuals")
     A = df[cfg.data.treatment]
     amin, amax = np.nanmin(A), np.nanmax(A)
     n_treatment_values = len(np.unique(A))
@@ -86,16 +116,19 @@ def main(cfg: DictConfig):
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
     mu_cf = pd.concat(mu_cf, axis=1)
-    mu_cf.columns = [f"{cfg.data.outcome}_pred_{i:02d}" for i in range(len(mu_cf.columns))]
+    mu_cf.columns = [
+        f"{cfg.data.outcome}_pred_{i:02d}" for i in range(len(mu_cf.columns))
+    ]
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
-    # save fit results
+    # === Save results ===
+    logger.info(f"Saving synthetic data, graph, and metadata")
     X = df[df.columns.difference([cfg.data.outcome, cfg.data.treatment])]
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
     dfout.to_csv("synthetic_data.csv")
+    nx.write_graphml(graph, "graph.graphml")
 
-    # save metadata
     name_prefix = "spaceb" if n_bins == 2 else "spacec"
     metadata = {
         "name": f"{name_prefix}_{cfg.data.base_name}_{cfg.data.treatment}_{cfg.data.outcome}",
@@ -104,15 +137,15 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
-        "feature_importance": feature_importance.importance.to_dict(),
+        "confounding_score": confounding_score.to_dict(),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f)
 
-    # save leaderboard
+    # model leaderboard from autogluon results
     results["leaderboard"].to_csv("leaderboard.csv", index=False)
 
-    # plot potential outcome curves
+    logger.info("Plotting counterfactuals and residuals.")
     ix = np.random.choice(len(df), cfg.num_plot_samples)
     cfpred_sample = mu_cf.iloc[ix].values
     fig, ax = plt.subplots(figsize=(4, 3))
@@ -123,8 +156,7 @@ def main(cfg: DictConfig):
     ax.set_title("Counterfactuals")
     fig.savefig("counterfactuals.png", dpi=300, bbox_inches="tight")
 
-    # plot histogram of true vs synthetic residuals
-    # normalize density to 1
+    logger.info("Plotting histogram of true and synthetic residuals.")
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.hist(fit_residuals, bins=20, density=True, alpha=0.5, label="True")
     ax.hist(synth_residuals, bins=20, density=True, alpha=0.5, label="Synthetic")
@@ -133,9 +165,6 @@ def main(cfg: DictConfig):
     ax.set_title("Residuals")
     ax.legend()
     fig.savefig("residuals.png", dpi=300, bbox_inches="tight")
-
-    # Save graph
-    nx.write_graphml(graph, "graph.graphml")
 
 
 if __name__ == "__main__":
