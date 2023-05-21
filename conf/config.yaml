@@ -4,13 +4,13 @@ defaults:
 
 data:
   base_name: ???
-  path: ???
+  data_path: ???
+  graph_path: ???
   confounder: null
   outcome: ???
-  treaments: ???
+  treament: ???
   index_col: null # can overwrite
-  treatment_bins: ???  # if 2, then assumed binary
-  graph_path: ???
+  treatment_max_bins: 100  # for binary bins will be 2
   has_coordinates: ???
 
   scaling:  # scaling done before transforms
@@ -21,9 +21,11 @@ data:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
 
+
 autogluon:
   fit:
     presets: medium_quality
 
 num_plot_samples: 50
 seed: 42
+debug_subsample:  # for quicker debugging set to a small number
