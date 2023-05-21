@@ -13,8 +13,9 @@ COPY requirements.yaml requirements.yaml
 # install dependencies
 RUN conda env create -f requirements.yaml
 
-# # Make RUN commands use the new environment:
-SHELL ["conda", "run", "-n", "spacedata", "/bin/bash", "-c"]
+# maek default conda env
+RUN echo "export CONDA_DEFAULT_ENV=spacedata" >> ~/.bashrc
+RUN echo "export PATH=/opt/conda/envs/spacedata/bin:\$PATH" >> ~/.bashrc
 
-ENV PATH /opt/conda/envs/spacedata/bin:$PATH
-ENV CONDA_DEFAULT_ENV spacedata
+# Make RUN commands use the new environment:
+SHELL ["conda", "run", "-n", "spacedata", "/bin/bash", "-c"]
