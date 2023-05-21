@@ -21,58 +21,57 @@ def main(cfg: DictConfig):
 
     # load data
     datadir = get_original_cwd() + "/data"
-    data = cfg.data
-    df = pd.read_csv(f"{datadir}/{data.path}", index_col=data.index_col)
-    df = df[df[data.treatment].notna()]
+    df = pd.read_csv(f"{datadir}/{cfg.data.path}", index_col=cfg.data.index_col)
+    df = df[df[cfg.data.treatment].notna()]
 
     # remove nans from training data
-    dftrain = df[~np.isnan(df[data.outcome])]
+    dftrain = df[~np.isnan(df[cfg.data.outcome])]
     train_data = TabularDataset(dftrain)
 
     # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     for tgt in ["treatment", "outcome"]:
-        scaling = getattr(data.scaling, tgt)
-        transform = getattr(data.transforms, tgt)
-        varname = getattr(data, tgt)
+        scaling = getattr(cfg.data.scaling, tgt)
+        transform = getattr(cfg.data.transforms, tgt)
+        varname = getattr(cfg.data, tgt)
         df[varname] = scale_variable(df[varname].values, scaling)
         df[varname] = transform_variable(df[varname].values, transform)
 
     # train
-    trainer = TabularPredictor(label=data.outcome)
+    trainer = TabularPredictor(label=cfg.data.outcome)
     predictor = trainer.fit(train_data, **cfg.autogluon.fit)
     feature_importance = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     mu_synth = predictor.predict(df)
 
     # get counterfactual treatments and predictions
-    A = df[data.treatment]
+    A = df[cfg.data.treatment]
     amin, amax = np.nanmin(A), np.nanmax(A)
-    avals = np.linspace(amin, amax, cfg.treatment_bins)
+    avals = np.linspace(amin, amax, cfg.data.treatment_bins)
 
     mu_cf = []
     for a in avals:
         cfdata = df.copy()
-        cfdata[data.treatment] = a
+        cfdata[cfg.data.treatment] = a
         cfdata = TabularDataset(cfdata)
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
     mu_cf = pd.concat(mu_cf, axis=1)
-    mu_cf.columns = [f"{data.outcome}_{i:02d}" for i in range(len(mu_cf.columns))]
+    mu_cf.columns = [f"{cfg.data.outcome}_{i:02d}" for i in range(len(mu_cf.columns))]
 
     # save fit results
-    X = df[df.columns.difference([data.outcome, data.treatment])]
+    X = df[df.columns.difference([cfg.data.outcome, cfg.data.treatment])]
     dfout = pd.concat([A, X, mu_synth, mu_cf], axis=1)
-    dfout.to_csv("synthetic_data.csv")
+    dfout.to_csv("synthetic_cfg.data.csv")
 
     metadata = {
-        "treatment": data.treatment,
-        "synthetic_outcome": data.outcome,
+        "treatment": cfg.data.treatment,
+        "synthetic_outcome": cfg.data.outcome,
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
         "feature_importance": feature_importance.importance.to_dict(),
     }
-    with open("metadata.yaml", "w") as f:
+    with open("metacfg.data.yaml", "w") as f:
         yaml.dump(metadata, f)
     results["leaderboard"].to_csv("leaderboard.csv", index=False)
 
@@ -82,8 +81,8 @@ def main(cfg: DictConfig):
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
     ax.scatter(A.iloc[ix], mu_synth.iloc[ix], color="red")
-    ax.set_xlabel(data.treatment)
-    ax.set_ylabel(data.outcome)
+    ax.set_xlabel(cfg.data.treatment)
+    ax.set_ylabel(cfg.data.outcome)
     ax.set_title("Counterfactuals")
     fig.savefig("counterfactuals.png", dpi=300)
 
