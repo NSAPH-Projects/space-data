@@ -73,9 +73,9 @@ def main(cfg: DictConfig):
     # save metadata
     name_prefix = "spaceb" if data.treatment_bins == 2 else "spacec"
     metadata = {
-        "name": f"{name_prefix}_{data.base_name}_{data.treatment}_{data.outcome}",
-        "treatment": data.treatment,
-        "predicted_outcome": data.outcome,
+        "name": f"{name_prefix}_{cfg.data.base_name}_{cfg.data.treatment}_{cfg.data.outcome}",
+        "treatment": cfg.data.treatment,
+        "predicted_outcome": cfg.data.outcome,
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
         "feature_importance": feature_importance.importance.to_dict(),
