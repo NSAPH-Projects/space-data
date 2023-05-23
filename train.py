@@ -10,7 +10,8 @@ import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 from autogluon.tabular import TabularDataset, TabularPredictor
 
-from utils import transform_variable, scale_variable, generate_noise_like
+
+from utils import transform_variable, scale_variable, generate_noise_like, moran_I
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,13 @@ def main(cfg: DictConfig):
         df_read_opts["dtype"] = {cfg.data.index_col: str}
     df = pd.read_csv(f"{owd}/{cfg.data.data_path}", **df_read_opts)
     df = df[df[cfg.data.treatment].notna()]
+
+    # maintain only covariates, treatment, and outcome
+    if cfg.data.covariates is not None:
+        covariates = cfg.data.covariates
+    else:
+        covariates = list(df.columns.difference([cfg.data.treatment, cfg.data.outcome]))
+    df = df[[cfg.data.treatment] + covariates + [cfg.data.outcome]]
 
     # read graphml
     logger.info(f"Reading graph from {cfg.data.graph_path}")
@@ -122,6 +130,13 @@ def main(cfg: DictConfig):
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
+    # === Compute the spatial smoothness of each covariate
+    logger.info(f"Computing spatial smoothness of each covariate.")
+    moran_I_values = {}
+    adjmat = nx.adjacency_matrix(graph, nodelist=df.index).toarray()
+    for c in covariates:
+        moran_I_values[c] = moran_I(df[c], adjmat)
+
     # === Save results ===
     logger.info(f"Saving synthetic data, graph, and metadata")
     X = df[df.columns.difference([cfg.data.outcome, cfg.data.treatment])]
@@ -138,6 +153,7 @@ def main(cfg: DictConfig):
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
         "confounding_score": confounding_score.to_dict(),
+        "spatial_scores": moran_I_values,
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f)

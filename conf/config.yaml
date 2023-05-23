@@ -6,7 +6,7 @@ data:
   base_name: ???
   data_path: ???
   graph_path: ???
-  confounder: null
+  covariates: null
   outcome: ???
   treament: ???
   index_col: null # can overwrite
