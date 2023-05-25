@@ -152,7 +152,7 @@ data_dict = {
             "cdc_mortality_pct": "gmet_mean_summer_sph",
         },
         "graph_path": "data/counties.graphml",
-        "data_path": "data/counties_election.csv",
+        "data_path": "data/air_pollution_mortality.csv",
         "overview": {
             "Description": "The dataset incorporates all-cause mortality data sourced from the CDC, along with a range of demographic and environmental variables, including data on temperature and air pollution, all pertaining to the year 2010.",
             "Spatial Coverage": "Continental USA",
@@ -259,7 +259,7 @@ data_dict = {
             "election_dem_pct": "cs_asian",
         },
         "graph_path": "data/counties.graphml",
-        "data_path": "data/air_pollution_mortality.csv",
+        "data_path": "data/counties_election.csv",
         "overview": {
             "Description": "The dataset includes election outcomes, specifically the percentage of the population in each county that voted for the Democratic Party in 2020. It also contains various aggregated data, such as demographics and employment statistics, from 2019 and 2020.",
             "Spatial Coverage": "Continental USA",
