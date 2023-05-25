@@ -106,7 +106,7 @@ def main(cfg: DictConfig):
     outcome_featimp = featimp.loc[treatment_featimp.index]
     confounding_score = np.minimum(
         outcome_featimp.importance, treatment_featimp.importance
-    )
+    ).sort_values(ascending=False)
 
     # === Counterfactual generation ===
     logger.info(f"Generating counterfactual predictions and adding residuals")
@@ -136,6 +136,8 @@ def main(cfg: DictConfig):
     adjmat = nx.adjacency_matrix(graph, nodelist=df.index).toarray()
     for c in covariates:
         moran_I_values[c] = moran_I(df[c], adjmat)
+    moran_I_values = {
+        k: v for k, v in sorted(moran_I_values.items(), key=lambda item: item[1], reverse=True)}
 
     # === Save results ===
     logger.info(f"Saving synthetic data, graph, and metadata")
@@ -150,13 +152,13 @@ def main(cfg: DictConfig):
         "treatment": cfg.data.treatment,
         "predicted_outcome": cfg.data.outcome,
         "synthetic_outcome": "Y_synth",
-        "covariates": list(X.columns),
-        "tretment_values": avals.tolist(),
         "confounding_score": confounding_score.to_dict(),
         "spatial_scores": moran_I_values,
+        "covariates": list(X.columns),
+        "tretment_values": avals.tolist(),
     }
     with open("metadata.yaml", "w") as f:
-        yaml.dump(metadata, f)
+        yaml.dump(metadata, f, sort_keys=False)
 
     # model leaderboard from autogluon results
     results["leaderboard"].to_csv("leaderboard.csv", index=False)
