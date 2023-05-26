@@ -148,7 +148,7 @@ def main(cfg: DictConfig):
 
     name_prefix = "spaceb" if n_bins == 2 else "spacec"
     metadata = {
-        "name": f"{name_prefix}_{cfg.data.base_name}_{cfg.data.treatment}_{cfg.data.outcome}",
+        "name": f"{name_prefix}_{cfg.data.base_name}",
         "treatment": cfg.data.treatment,
         "predicted_outcome": cfg.data.outcome,
         "synthetic_outcome": "Y_synth",
