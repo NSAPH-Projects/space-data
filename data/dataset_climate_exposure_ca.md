@@ -16,7 +16,7 @@
 | Missing cells (%)      | 0.0%                                                                                                                                                                                                                                                                                                  |
 | Duplicate Rows         | 0                                                                                                                                                                                                                                                                                                     |
 | Duplicate Rows (%)     | 0.0%                                                                                                                                                                                                                                                                                                  |
-| Total Size In Memory   | 1.52203 MB                                                                                                                                                                                                                                                                                            |
+| Total Size In Memory   | 1.52 MB                                                                                                                                                                                                                                                                                               |
 
 # Variables
 

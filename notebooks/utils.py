@@ -4,8 +4,8 @@ data_dict = {
             "E_TOTPOP": "E_HU",
             "EP_MINRTY": "RPL_THEMES",
             "EP_NOHSDP": "EP_POV150",
-            "E_NOINT": "EP_POV150",
-            "E_MUNIT": "EP_HBURD",
+            "EP_NOINT": "EP_POV150",
+            "EP_MUNIT": "EP_HBURD",
         },
         "secondary": {
             "E_HH": "E_TOTPOP",
@@ -36,7 +36,8 @@ data_dict = {
             "E_TOTPOP": "The estimated total population of the geographical region.",
             "E_HU": "The estimated total number of housing units in the area.",
             "E_HH": "The estimated number of households in the area.",
-            "E_MUNIT": "The estimated number of housing units in a multi-unit structure.",
+            "EP_MUNIT": "The estimated percentage of housing units in a multi-unit structure.",
+            "EP_NOINT": "The estimated percentage of households without an internet subscription.",
             "EP_POV150": "The estimated percentage of the population living at 150% of the poverty level or below.",
             "EP_UNEMP": "The estimated percentage of the labor force that is unemployed.",
             "EP_HBURD": "The estimated percentage of households with housing cost burdens (defined as spending more than 30% of income on housing).",
@@ -54,7 +55,6 @@ data_dict = {
             "RPL_THEME3": "Percentile ranking for Racial and Ethnic Minority Status theme.",
             "RPL_THEME4": "Percentile ranking for Housing Type/ Transportation theme.",
             "RPL_THEMES": "Overall percentile ranking.",
-            "E_NOINT": "The estimated number of households without an internet subscription.",
         }
     },
     "climate_exposure_ca": {
@@ -152,7 +152,7 @@ data_dict = {
             "cdc_mortality_pct": "gmet_mean_summer_sph",
         },
         "graph_path": "data/counties.graphml",
-        "data_path": "data/counties_election.csv",
+        "data_path": "data/air_pollution_mortality.csv",
         "overview": {
             "Description": "The dataset incorporates all-cause mortality data sourced from the CDC, along with a range of demographic and environmental variables, including data on temperature and air pollution, all pertaining to the year 2010.",
             "Spatial Coverage": "Continental USA",
@@ -259,7 +259,7 @@ data_dict = {
             "election_dem_pct": "cs_asian",
         },
         "graph_path": "data/counties.graphml",
-        "data_path": "data/air_pollution_mortality.csv",
+        "data_path": "data/counties_election.csv",
         "overview": {
             "Description": "The dataset includes election outcomes, specifically the percentage of the population in each county that voted for the Democratic Party in 2020. It also contains various aggregated data, such as demographics and employment statistics, from 2019 and 2020.",
             "Spatial Coverage": "Continental USA",
