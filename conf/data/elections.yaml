@@ -1,8 +1,7 @@
 data_path: data/counties_election.csv
-base_name: elect
+base_name: elect_dempct_college
 outcome: election_dem_pct
 index_col: 0
 treatment: cs_ed_above_college
-masked_spatial_confounder: avg_income
 graph_path: data/counties.graphml
 has_coordinates: true
