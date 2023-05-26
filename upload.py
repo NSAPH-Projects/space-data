@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import shutil
 import yaml
@@ -49,12 +50,13 @@ def main(args):
     zipfile = double_zip_folder(metadata['name'], metadata['name'])
     
     # upload to dataverse
+    with open(f"{metadata['name']}/config.yaml", 'r') as f:
+        config = yaml.load(f, Loader=yaml.FullLoader)
+    
     data_description = f"""
-        This is a synthetic dataset generated for the space project.
-        The dataset was generated using the following configuration:
-        base dataset: ## TODO: add base_name to metadata.yaml
-        outcome: {metadata['predicted_outcome']}
-        treatment: {metadata['treatment']}
+        This is a synthetic dataset generated for the space project.\n
+        The dataset was generated using the following configuration:\n
+        {json.dumps(config)}
         """
     
     upload_dataverse_data(
