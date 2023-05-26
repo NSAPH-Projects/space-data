@@ -1,12 +1,48 @@
-from typing import Literal
 import numpy as np
 import pandas as pd
+import os
+from typing import Literal
+import logging
 import networkx as nx
 from scipy.linalg import cholesky, solve_triangular
-import logging
-
+from pyDataverse.models import Datafile
+from pyDataverse.api import NativeApi
 
 LOGGER = logging.getLogger(__name__)
+
+def upload_dataverse_data(
+    data_path: str,
+    data_description: str,
+    dataverse_baseurl: str, 
+    dataverse_pid: str,
+    dataverse_token: str):
+    """
+    Upload data to the collection   
+    Args:
+        file_path (str): Filename 
+        description (str): Data file description.
+        token (str): Dataverse API Token.
+    """
+    api = NativeApi(dataverse_baseurl, dataverse_token)
+    
+    filename = os.path.basename(data_path)
+
+    dataverse_datafile = Datafile()
+    dataverse_datafile.set({
+        "pid": dataverse_pid,
+        "filename": filename,
+        "description": data_description,
+    })
+    LOGGER.info("File basename: "+filename)
+    
+    resp = api.upload_datafile(
+       dataverse_pid, data_path, dataverse_datafile.json())
+    
+    if resp.json()["status"] == "OK":
+        LOGGER.info("Dataset uploaded.")
+    else:
+        LOGGER.error("Dataset not uploaded.")
+        LOGGER.error(resp.json())
 
 
 def scale_variable(

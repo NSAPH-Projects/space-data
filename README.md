@@ -7,6 +7,12 @@ conda activate spacedata
 ```
 
 ## Run code
+
+export your dataverse api token
+```
+export DATAVERSE_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+```
+
 ```
 python train.py data=elections
 ```
@@ -21,4 +27,3 @@ Look at the files generated in `outputs/`:
 ## Add new datasets
 
 Add a config file in `conf/data`. Look at `conf/data/elections.yaml` for inspiration. Look at `conf/config.yaml` the elements marked with `???` are mandatory in `conf/data`.
-
