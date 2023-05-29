@@ -28,6 +28,9 @@ def main(cfg: DictConfig):
     """
     Trains a model using AutoGluon and save the results.
     """
+    # == Load config ===
+    spaceenv = cfg.spaceenv
+
     # === Data preparation ===
     # set seed
     seed_everything(cfg.seed)
@@ -36,39 +39,39 @@ def main(cfg: DictConfig):
     owd = get_original_cwd()
 
     # download dataset and graph from dataverse if necessary
-    files = {"Graph": cfg.data.graph_path, "Data": cfg.data.data_path}
+    files = {"Graph": spaceenv.graph_path, "Data": spaceenv.data_path}
     for obj, path in files.items():
         if not os.path.exists(f"{owd}/{path}"):
             filename = os.path.basename(path)
             logger.info(f"{obj} not found. Downloading from dataverse.")
             download_dataverse_data(
                 filename=filename,
-                dataverse_baseurl=cfg.dataverse.baseurl,
-                dataverse_pid=cfg.dataverse.pid,
+                dataverse_baseurl=spaceenvverse.baseurl,
+                dataverse_pid=spaceenvverse.pid,
                 output_dir=f"{owd}/data",
             )
 
     # load data
-    logger.info(f"Loading data from {cfg.data.data_path}")
-    data_ext = cfg.data.data_path.split(".")[-1]
+    logger.info(f"Loading data from {spaceenv.data_path}")
+    data_ext = spaceenv.data_path.split(".")[-1]
     delim = "," if data_ext == "csv" else "\t"
     df_read_opts = {"sep": delim}
-    if cfg.data.index_col is not None:
-        df_read_opts["index_col"] = cfg.data.index_col
-        df_read_opts["dtype"] = {cfg.data.index_col: str}
-    df = pd.read_csv(f"{owd}/{cfg.data.data_path}", **df_read_opts)
-    df = df[df[cfg.data.treatment].notna()]
+    if spaceenv.index_col is not None:
+        df_read_opts["index_col"] = spaceenv.index_col
+        df_read_opts["dtype"] = {spaceenv.index_col: str}
+    df = pd.read_csv(f"{owd}/{spaceenv.data_path}", **df_read_opts)
+    df = df[df[spaceenv.treatment].notna()]
 
     # maintain only covariates, treatment, and outcome
-    if cfg.data.covariates is not None:
-        covariates = cfg.data.covariates
+    if spaceenv.covariates is not None:
+        covariates = spaceenv.covariates
     else:
-        covariates = list(df.columns.difference([cfg.data.treatment, cfg.data.outcome]))
-    df = df[[cfg.data.treatment] + covariates + [cfg.data.outcome]]
+        covariates = list(df.columns.difference([spaceenv.treatment, spaceenv.outcome]))
+    df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
 
     # read graphml
-    logger.info(f"Reading graph from {cfg.data.graph_path}")
-    graph = nx.read_graphml(f"{owd}/{cfg.data.graph_path}")
+    logger.info(f"Reading graph from {spaceenv.graph_path}")
+    graph = nx.read_graphml(f"{owd}/{spaceenv.graph_path}")
 
     # test with a subset of the data
     if cfg.debug_subsample is not None:
@@ -85,16 +88,16 @@ def main(cfg: DictConfig):
     df = df.loc[intersection]
 
     # remove nans from training data
-    dftrain = df[~np.isnan(df[cfg.data.outcome])]
+    dftrain = df[~np.isnan(df[spaceenv.outcome])]
     train_data = TabularDataset(dftrain)
 
     # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     logger.info(f"Transforming data.")
     for tgt in ["treatment", "outcome"]:
-        scaling = getattr(cfg.data.scaling, tgt)
-        transform = getattr(cfg.data.transforms, tgt)
-        varname = getattr(cfg.data, tgt)
+        scaling = getattr(spaceenv.scaling, tgt)
+        transform = getattr(spaceenv.transforms, tgt)
+        varname = getattr(spaceenv, tgt)
         if scaling is not None:
             logger.info(f"Scaling {varname} with {scaling}")
             df[varname] = scale_variable(df[varname].values, scaling)
@@ -104,7 +107,7 @@ def main(cfg: DictConfig):
 
     # === Model fitting ===
     logger.info(f"Fitting model to outcome variable.")
-    trainer = TabularPredictor(label=cfg.data.outcome)
+    trainer = TabularPredictor(label=spaceenv.outcome)
     predictor = trainer.fit(train_data, **cfg.autogluon.fit)
     featimp = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
@@ -113,15 +116,15 @@ def main(cfg: DictConfig):
 
     # inject noise
     logger.info(f"Generating synthetic residuals for synthetic outcome.")
-    fit_residuals = dftrain[cfg.data.outcome] - predictor.predict(train_data)
+    fit_residuals = dftrain[spaceenv.outcome] - predictor.predict(train_data)
     synth_residuals = generate_noise_like(fit_residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
 
     logger.info(f"Fitting model to treatment variable for confounding score.")
-    treatment_trainer = TabularPredictor(label=cfg.data.treatment)
+    treatment_trainer = TabularPredictor(label=spaceenv.treatment)
     treatment_train_data = TabularDataset(
-        dftrain[dftrain.columns.difference([cfg.data.outcome])]
+        dftrain[dftrain.columns.difference([spaceenv.outcome])]
     )
     treatment_predictor = treatment_trainer.fit(
         treatment_train_data, **cfg.autogluon.fit
@@ -134,22 +137,22 @@ def main(cfg: DictConfig):
 
     # === Counterfactual generation ===
     logger.info(f"Generating counterfactual predictions and adding residuals")
-    A = df[cfg.data.treatment]
+    A = df[spaceenv.treatment]
     amin, amax = np.nanmin(A), np.nanmax(A)
     n_treatment_values = len(np.unique(A))
-    n_bins = min(cfg.data.treatment_max_bins, n_treatment_values)
+    n_bins = min(spaceenv.treatment_max_bins, n_treatment_values)
     avals = np.linspace(amin, amax, n_bins)
 
     mu_cf = []
     for a in avals:
         cfdata = df.copy()
-        cfdata[cfg.data.treatment] = a
+        cfdata[spaceenv.treatment] = a
         cfdata = TabularDataset(cfdata)
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
     mu_cf = pd.concat(mu_cf, axis=1)
     mu_cf.columns = [
-        f"{cfg.data.outcome}_pred_{i:02d}" for i in range(len(mu_cf.columns))
+        f"{spaceenv.outcome}_pred_{i:02d}" for i in range(len(mu_cf.columns))
     ]
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
@@ -169,16 +172,16 @@ def main(cfg: DictConfig):
 
     # === Save results ===
     logger.info(f"Saving synthetic data, graph, and metadata")
-    X = df[df.columns.difference([cfg.data.outcome, cfg.data.treatment])]
+    X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
     dfout.to_csv("synthetic_data.csv")
     nx.write_graphml(graph, "graph.graphml")
 
     name_prefix = "spaceb" if n_bins == 2 else "spacec"
     metadata = {
-        "name": f"{name_prefix}_{cfg.data.base_name}",
-        "treatment": cfg.data.treatment,
-        "predicted_outcome": cfg.data.outcome,
+        "name": f"{name_prefix}_{spaceenv.base_name}",
+        "treatment": spaceenv.treatment,
+        "predicted_outcome": spaceenv.outcome,
         "synthetic_outcome": "Y_synth",
         "confounding_score": confounding_score.to_dict(),
         "spatial_scores": moran_I_values,
@@ -197,8 +200,8 @@ def main(cfg: DictConfig):
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
     ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
-    ax.set_xlabel(cfg.data.treatment)
-    ax.set_ylabel(cfg.data.outcome)
+    ax.set_xlabel(spaceenv.treatment)
+    ax.set_ylabel(spaceenv.outcome)
     ax.set_title("Counterfactuals")
     fig.savefig("counterfactuals.png", dpi=300, bbox_inches="tight")
 
