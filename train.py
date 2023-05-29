@@ -1,3 +1,4 @@
+import os
 from omegaconf import DictConfig
 from hydra.utils import get_original_cwd
 import logging
@@ -11,7 +12,13 @@ from pytorch_lightning import seed_everything
 from autogluon.tabular import TabularDataset, TabularPredictor
 
 
-from utils import transform_variable, scale_variable, generate_noise_like, moran_I
+from utils import (
+    transform_variable,
+    scale_variable,
+    generate_noise_like,
+    moran_I,
+    download_dataverse_data,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +32,27 @@ def main(cfg: DictConfig):
     # set seed
     seed_everything(cfg.seed)
 
+    # root directory
+    owd = get_original_cwd()
+
+    # download dataset and graph from dataverse if necessary
+    files = {"Graph": cfg.data.graph_path, "Data": cfg.data.data_path}
+    for obj, path in files.items():
+        if not os.path.exists(f"{owd}/{path}"):
+            filename = os.path.basename(path)
+            logger.info(f"{obj} not found. Downloading from dataverse.")
+            download_dataverse_data(
+                filename=filename,
+                dataverse_baseurl=cfg.dataverse.baseurl,
+                dataverse_pid=cfg.dataverse.pid,
+                output_dir=f"{owd}/data",
+            )
+
     # load data
     logger.info(f"Loading data from {cfg.data.data_path}")
-    owd = get_original_cwd()
-    df_read_opts = {}
+    data_ext = cfg.data.data_path.split(".")[-1]
+    delim = "," if data_ext == "csv" else "\t"
+    df_read_opts = {"sep": delim}
     if cfg.data.index_col is not None:
         df_read_opts["index_col"] = cfg.data.index_col
         df_read_opts["dtype"] = {cfg.data.index_col: str}
@@ -137,7 +161,11 @@ def main(cfg: DictConfig):
     for c in covariates:
         moran_I_values[c] = moran_I(df[c], adjmat)
     moran_I_values = {
-        k: v for k, v in sorted(moran_I_values.items(), key=lambda item: item[1], reverse=True)}
+        k: v
+        for k, v in sorted(
+            moran_I_values.items(), key=lambda item: item[1], reverse=True
+        )
+    }
 
     # === Save results ===
     logger.info(f"Saving synthetic data, graph, and metadata")
