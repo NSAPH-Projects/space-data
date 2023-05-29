@@ -1,0 +1,7 @@
+base_name: cdc_atsdr_svi_tx
+data_path: data/cdcatsdrsvi_tx.csv
+graph_path: data/tx_tracts.graphml
+outcome: EP_POV150
+treatment: E_NOINT
+has_coordinates: true
+index_col: 0
