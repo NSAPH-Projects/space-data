@@ -1,6 +1,7 @@
 defaults:
   - _self_
-  - data:
+  - data: ???
+  - space_dataverse.yaml
 
 data:
   base_name: ???

@@ -1,8 +1,10 @@
+defaults:
+  - _self_
+  - space_dataverse.yaml
+
 train_output_path: ???
-dataverse_baseurl: "https://dataverse.harvard.edu"
-dataverse_pid: "doi:10.7910/DVN/SYNPBS"
-dataverse_token: nullblob:vscode-webview://00qeps07r037p7hebfmrlsrs4bghonbtuo1gvg1k57lvam58pkod/9a117da8-5e3c-4a44-8cd4-4e3e1d79bea6
 debug: false  # when debug is true, the script will not upload to dataverse
+
 hydra:
   job:
     chdir: false

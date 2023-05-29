@@ -27,7 +27,6 @@ def double_zip_folder(folder_path, output_path):
 
 @hydra.main(config_path="conf", config_name="upload")
 def main(cfg: DictConfig):
-
     # load metadata
     with open(f"{cfg.train_output_path}/metadata.yaml", "r") as f:
         metadata = yaml.load(f, Loader=yaml.FullLoader)
@@ -77,16 +76,23 @@ def main(cfg: DictConfig):
         {json.dumps(config)}
         """
 
+    dataverse_token = cfg.dataverse.token
+    if cfg.dataverse.token is None:
+        dataverse_token = os.environ.get("DATAVERSE_TOKEN", None)
+
     if not cfg.debug:
+        if dataverse_token is None:
+            raise ValueError(
+                "No token provided and DATAVERSE_TOKEN not found in enviroment."
+            )
+
         upload_dataverse_data(
             zipfile,
             data_description,
-            cfg.dataverse_baseurl,
-            cfg.dataverse_pid,
-            cfg.dataverse_token,
+            cfg.dataverse.baseurl,
+            cfg.dataverse.pid,
+            dataverse_token,
         )
-
-    os.remove(zipfile)
 
 
 if __name__ == "__main__":
