@@ -10,34 +10,38 @@ from pyDataverse.api import NativeApi
 
 LOGGER = logging.getLogger(__name__)
 
+
 def upload_dataverse_data(
     data_path: str,
     data_description: str,
-    dataverse_baseurl: str, 
+    dataverse_baseurl: str,
     dataverse_pid: str,
-    dataverse_token: str):
+    dataverse_token: str,
+):
     """
-    Upload data to the collection   
+    Upload data to the collection
     Args:
-        file_path (str): Filename 
+        file_path (str): Filename
         description (str): Data file description.
         token (str): Dataverse API Token.
     """
+
     api = NativeApi(dataverse_baseurl, dataverse_token)
-    
+
     filename = os.path.basename(data_path)
 
     dataverse_datafile = Datafile()
-    dataverse_datafile.set({
-        "pid": dataverse_pid,
-        "filename": filename,
-        "description": data_description,
-    })
-    LOGGER.info("File basename: "+filename)
-    
-    resp = api.upload_datafile(
-       dataverse_pid, data_path, dataverse_datafile.json())
-    
+    dataverse_datafile.set(
+        {
+            "pid": dataverse_pid,
+            "filename": filename,
+            "description": data_description,
+        }
+    )
+    LOGGER.info("File basename: " + filename)
+
+    resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
+
     if resp.json()["status"] == "OK":
         LOGGER.info("Dataset uploaded.")
     else:
@@ -108,7 +112,7 @@ def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
         y_loss = 0.5 * ((x.values - beta) / sig) ** 2 + np.log(sig)
 
         # diffs ~ N(0, sig**2 / lam)
-        l = (lam / sig**2)
+        l = lam / sig**2
         diff_loss = 0.5 * l * (beta[e1] - beta[e2]) ** 2 - 0.5 * np.log(l)
 
         penalty_loss = len(e1) * l + (1 / sig**2)
@@ -150,15 +154,15 @@ def moran_I(x: pd.Series, A: np.ndarray) -> float:
 
     # input the mean of x when there nan values
     x[np.isnan(x)] = np.nanmean(x)
-    
+
     # Compute mean of attribute values
     x_bar = np.mean(x)
-    
+
     # Subtract mean from attribute values
     x_diff = x - x_bar
 
     # Compute denominator: sum of squared differences from mean
-    denominator = np.sum(x_diff ** 2) + 1e-8
+    denominator = np.sum(x_diff**2) + 1e-8
 
     # Compute numerator: sum of product of weight and pair differences from mean
     # Matrix multiplication to achieve vectorization
@@ -166,5 +170,5 @@ def moran_I(x: pd.Series, A: np.ndarray) -> float:
 
     # Compute Moran's I
     I = len(x) / np.sum(A) * (numerator / denominator)
-    
+
     return float(I)
