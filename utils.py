@@ -6,9 +6,29 @@ import logging
 import networkx as nx
 from scipy.linalg import cholesky, solve_triangular
 from pyDataverse.models import Datafile
-from pyDataverse.api import NativeApi
+from pyDataverse.api import NativeApi, DataAccessApi
 
 LOGGER = logging.getLogger(__name__)
+
+
+def download_dataverse_data(
+    filename: str,
+    dataverse_baseurl: str,
+    dataverse_pid: str,
+    output_dir: str = ".",
+):
+    api = NativeApi(dataverse_baseurl)
+    data_api = DataAccessApi(dataverse_baseurl)
+    dataset = api.get_dataset(dataverse_pid)
+    files_list = dataset.json()["data"]["latestVersion"]["files"]
+    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
+
+    if filename not in file2id:
+        raise ValueError(f"File {filename} not found in dataverse.")
+    else:
+        response = data_api.get_datafile(file2id[filename])
+        with open(f"{output_dir}/{filename}", "wb") as f:
+            f.write(response.content)
 
 
 def upload_dataverse_data(
