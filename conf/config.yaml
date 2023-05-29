@@ -1,8 +1,8 @@
 defaults:
   - _self_
-  - data:
+  - spaceenv:
 
-data:
+spaceenv:
   base_name: ???
   data_path: ???
   graph_path: ???
