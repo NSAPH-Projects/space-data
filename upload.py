@@ -2,7 +2,6 @@ import json
 import os
 import shutil
 import yaml
-from zipfile import ZipFile
 from omegaconf import DictConfig
 import logging
 import hydra
@@ -16,7 +15,7 @@ LOGGER = logging.getLogger(__name__)
 def main(cfg: DictConfig):
     # load metadata
     train_dir = f"{hydra.utils.get_original_cwd()}/outputs/{cfg.base_name}"
-    contents_dir = "contents"
+    contents_dir = cfg.base_name
     assert os.path.exists(train_dir), f"Train directory {train_dir} not found."
 
     if os.path.exists(contents_dir):
