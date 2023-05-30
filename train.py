@@ -33,7 +33,7 @@ def main(cfg: DictConfig):
 
     # === Data preparation ===
     # set seed
-    seed_everything(cfg.seed)
+    seed_everything(spaceenv.seed)
 
     # root directory
     owd = get_original_cwd()
@@ -46,8 +46,8 @@ def main(cfg: DictConfig):
             logger.info(f"{obj} not found. Downloading from dataverse.")
             download_dataverse_data(
                 filename=filename,
-                dataverse_baseurl=spaceenvverse.baseurl,
-                dataverse_pid=spaceenvverse.pid,
+                dataverse_baseurl=cfg.dataverse.baseurl,
+                dataverse_pid=cfg.dataverse.pid,
                 output_dir=f"{owd}/data",
             )
 
@@ -108,7 +108,7 @@ def main(cfg: DictConfig):
     # === Model fitting ===
     logger.info(f"Fitting model to outcome variable.")
     trainer = TabularPredictor(label=spaceenv.outcome)
-    predictor = trainer.fit(train_data, **cfg.autogluon.fit)
+    predictor = trainer.fit(train_data, **spaceenv.autogluon.fit)
     featimp = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     mu = predictor.predict(df)
@@ -127,7 +127,7 @@ def main(cfg: DictConfig):
         dftrain[dftrain.columns.difference([spaceenv.outcome])]
     )
     treatment_predictor = treatment_trainer.fit(
-        treatment_train_data, **cfg.autogluon.fit
+        treatment_train_data, **spaceenv.autogluon.fit
     )
     treatment_featimp = treatment_predictor.feature_importance(treatment_train_data)
     outcome_featimp = featimp.loc[treatment_featimp.index]

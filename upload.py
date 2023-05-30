@@ -28,46 +28,24 @@ def double_zip_folder(folder_path, output_path):
 @hydra.main(config_path="conf", config_name="upload")
 def main(cfg: DictConfig):
     # load metadata
-    with open(f"{cfg.train_output_path}/metadata.yaml", "r") as f:
-        metadata = yaml.load(f, Loader=yaml.FullLoader)
-    dataset_name = metadata["name"]
-    odir = f"uploads/{dataset_name}"  # output dir
+    train_dir = f"{hydra.utils.get_original_cwd()}/outputs/{cfg.base_name}"
+    assert os.path.exists(train_dir), f"Train directory {train_dir} not found."
 
-    # create folder
-    shutil.rmtree(odir, ignore_errors=True)
-    os.mkdir(odir)
+    # with open(f"{train_dir}/metadata.yaml", "r") as f:
+    #     metadata = yaml.load(f, Loader=yaml.FullLoader)
 
-    # metadata.yaml
-    shutil.copy(
-        f"{cfg.train_output_path}/metadata.yaml",
-        f"{odir}/metadata.yaml",
-    )
-    # synthetic_data.csv
-    shutil.copy(
-        f"{cfg.train_output_path}/synthetic_data.csv",
-        f"{odir}/synthetic_data.csv",
-    )
-    # leaderboard.csv
-    shutil.copy(
-        f"{cfg.train_output_path}/leaderboard.csv",
-        f"{odir}/leaderboard.csv",
-    )
-    # config.yaml
-    shutil.copy(
-        f"{cfg.train_output_path}/.hydra/config.yaml",
-        f"{odir}/config.yaml",
-    )
-    # graph.graphml
-    shutil.copy(
-        f"{cfg.train_output_path}/graph.graphml",
-        f"{odir}/graph.graphml",
-    )
+    # copy relevant files to working directory
+    shutil.copy(f"{train_dir}/metadata.yaml", ".")
+    shutil.copy(f"{train_dir}/synthetic_data.csv", ".")
+    shutil.copy(f"{train_dir}/leaderboard.csv", ".")
+    shutil.copy(f"{train_dir}/.hydra/config.yaml", "config.yaml")
+    shutil.copy(f"{train_dir}/graph.graphml", ".")
 
     # compress folder and double zip
-    zipfile = double_zip_folder(odir, f"{odir}/{dataset_name}")
+    zipfile = double_zip_folder(".", f"{cfg.base_name}")
 
     # upload to dataverse
-    with open(f"{odir}/config.yaml", "r") as f:
+    with open(f"config.yaml", "r") as f:
         config = yaml.load(f, Loader=yaml.BaseLoader)
 
     data_description = f"""
