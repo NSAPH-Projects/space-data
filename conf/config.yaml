@@ -34,3 +34,5 @@ debug_subsample:  # for quicker debugging set to a small number
 hydra:
   run:
     dir: outputs/${spaceenv.base_name}
+  job:
+    chdir: true

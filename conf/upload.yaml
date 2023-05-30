@@ -8,3 +8,5 @@ debug: false  # when debug is true, the script will not upload to dataverse
 hydra:
   run:
     dir: uploads/${base_name}
+  job:
+    chdir: true

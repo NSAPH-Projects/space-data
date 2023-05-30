@@ -25,7 +25,7 @@ def double_zip_folder(folder_path, output_path):
     return zipzip_path
 
 
-@hydra.main(config_path="conf", config_name="upload")
+@hydra.main(config_path="conf", config_name="upload", version_base=None)
 def main(cfg: DictConfig):
     # load metadata
     train_dir = f"{hydra.utils.get_original_cwd()}/outputs/{cfg.base_name}"

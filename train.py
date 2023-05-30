@@ -23,7 +23,7 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="conf", config_name="config", version_base=None)
 def main(cfg: DictConfig):
     """
     Trains a model using AutoGluon and save the results.
@@ -81,9 +81,10 @@ def main(cfg: DictConfig):
 
     # keep intersectio of nodes in graph and data
     intersection = set(df.index).intersection(set(graph.nodes))
-    perc = 100 * len(intersection) / len(df)
+    n = len(intersection)
+    perc = 100 * n / len(df)
     logger.info(f"Homegenizing data and graph")
-    logger.info(f"...{perc:.2f}% of the data rows found in graph nodes.")
+    logger.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
     graph = nx.subgraph(graph, intersection)
     df = df.loc[intersection]
 
