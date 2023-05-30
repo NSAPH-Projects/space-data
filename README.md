@@ -36,7 +36,7 @@ You will need a Harvard Dataverse API token and export it as an environment vari
 
 ```
 export DATAVERSE_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-python upload.py spaceenv=<base_name>
+python upload.py base_name=<base_name>
 ```
 
 
