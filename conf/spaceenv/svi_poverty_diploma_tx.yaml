@@ -1,0 +1,14 @@
+data_path: data/cdcatsdrsvi_tx.csv
+base_name: texas
+outcome: EP_POV150
+index_col: 0
+treatment: EP_NOHSDP
+masked_spatial_confounder: avg_income
+has_coordinates: true
+graph_path: data/tx_tracts.graphml
+covariates:
+  - EP_AGE65
+  - EP_DISABL
+  - EP_MINRTY
+  - EP_LIMENG
+  - EP_HBURD
