@@ -50,7 +50,7 @@ Add a config file in `conf/spaceenv`. Look at `conf/spaceenv/elect_dempct_colleg
 
 List here the `base_name` of the uploaded `.yaml`. Include the specific config file only in case that the config file and base name is different.
 
-- elect_dempct_college
+- elect_dempct_college (continuous treatment)
 
 ## List of Raw Data Sources
 
