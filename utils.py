@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 import os
+import shutil
+from zipfile import ZipFile
 from typing import Literal
 import logging
 import networkx as nx
@@ -37,6 +39,7 @@ def upload_dataverse_data(
     dataverse_baseurl: str,
     dataverse_pid: str,
     dataverse_token: str,
+    debug: bool = False,
 ):
     """
     Upload data to the collection
@@ -60,13 +63,15 @@ def upload_dataverse_data(
     )
     LOGGER.info("File basename: " + filename)
 
-    resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
-
-    if resp.json()["status"] == "OK":
-        LOGGER.info("Dataset uploaded.")
+    if not debug:
+        resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
+        if resp.json()["status"] == "OK":
+            LOGGER.info("Dataset uploaded.")
+        else:
+            LOGGER.error("Dataset not uploaded.")
+            LOGGER.error(resp.json())
     else:
-        LOGGER.error("Dataset not uploaded.")
-        LOGGER.error(resp.json())
+        LOGGER.info("Debug mode. Dataset not uploaded.")
 
 
 def scale_variable(
@@ -192,3 +197,18 @@ def moran_I(x: pd.Series, A: np.ndarray) -> float:
     I = len(x) / np.sum(A) * (numerator / denominator)
 
     return float(I)
+
+
+def double_zip_folder(folder_path, output_path):
+    # Create a temporary zip file
+    shutil.make_archive(output_path, "zip", folder_path)
+
+    # Zip the temporary zip file
+    zipzip_path = output_path + ".zip.zip"
+    with ZipFile(zipzip_path, "w") as f:
+        f.write(output_path + ".zip")
+
+    # Remove the temporary zip file
+    os.remove(output_path + ".zip")
+
+    return zipzip_path

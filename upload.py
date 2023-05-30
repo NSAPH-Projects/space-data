@@ -2,72 +2,39 @@ import json
 import os
 import shutil
 import yaml
-from zipfile import ZipFile
 from omegaconf import DictConfig
-
+import logging
 import hydra
 
-from utils import upload_dataverse_data
+from utils import upload_dataverse_data, double_zip_folder
+
+LOGGER = logging.getLogger(__name__)
 
 
-def double_zip_folder(folder_path, output_path):
-    # Create a temporary zip file
-    shutil.make_archive(output_path, "zip", folder_path)
-
-    # Zip the temporary zip file
-    zipzip_path = output_path + ".zip.zip"
-    with ZipFile(zipzip_path, "w") as f:
-        f.write(output_path + ".zip")
-
-    # Remove the temporary zip file
-    os.remove(output_path + ".zip")
-
-    return zipzip_path
-
-
-@hydra.main(config_path="conf", config_name="upload")
+@hydra.main(config_path="conf", config_name="upload", version_base=None)
 def main(cfg: DictConfig):
     # load metadata
-    with open(f"{cfg.train_output_path}/metadata.yaml", "r") as f:
-        metadata = yaml.load(f, Loader=yaml.FullLoader)
-    dataset_name = metadata["name"]
-    odir = f"uploads/{dataset_name}"  # output dir
+    train_dir = f"{hydra.utils.get_original_cwd()}/outputs/{cfg.base_name}"
+    contents_dir = cfg.base_name
+    assert os.path.exists(train_dir), f"Train directory {train_dir} not found."
 
-    # create folder
-    shutil.rmtree(odir, ignore_errors=True)
-    os.mkdir(odir)
+    if os.path.exists(contents_dir):
+        LOGGER.info(f"Target directory {contents_dir} already exists.")
+    else:
+        os.mkdir(contents_dir)
 
-    # metadata.yaml
-    shutil.copy(
-        f"{cfg.train_output_path}/metadata.yaml",
-        f"{odir}/metadata.yaml",
-    )
-    # synthetic_data.csv
-    shutil.copy(
-        f"{cfg.train_output_path}/synthetic_data.csv",
-        f"{odir}/synthetic_data.csv",
-    )
-    # leaderboard.csv
-    shutil.copy(
-        f"{cfg.train_output_path}/leaderboard.csv",
-        f"{odir}/leaderboard.csv",
-    )
-    # config.yaml
-    shutil.copy(
-        f"{cfg.train_output_path}/.hydra/config.yaml",
-        f"{odir}/config.yaml",
-    )
-    # graph.graphml
-    shutil.copy(
-        f"{cfg.train_output_path}/graph.graphml",
-        f"{odir}/graph.graphml",
-    )
+    # copy relevant files to working directory
+    shutil.copy(f"{train_dir}/metadata.yaml", contents_dir)
+    shutil.copy(f"{train_dir}/synthetic_data.csv", contents_dir)
+    shutil.copy(f"{train_dir}/leaderboard.csv", contents_dir)
+    shutil.copy(f"{train_dir}/.hydra/config.yaml", f"{contents_dir}/config.yaml")
+    shutil.copy(f"{train_dir}/graph.graphml", contents_dir)
 
     # compress folder and double zip
-    zipfile = double_zip_folder(odir, f"{odir}/{dataset_name}")
+    zipfile = double_zip_folder(contents_dir, f"{cfg.base_name}")
 
     # upload to dataverse
-    with open(f"{odir}/config.yaml", "r") as f:
+    with open(f"{contents_dir}/config.yaml", "r") as f:
         config = yaml.load(f, Loader=yaml.BaseLoader)
 
     data_description = f"""
@@ -80,18 +47,21 @@ def main(cfg: DictConfig):
     if cfg.dataverse.token is None:
         dataverse_token = os.environ.get("DATAVERSE_TOKEN", None)
 
-    if not cfg.debug:
-        if dataverse_token is None:
+    if dataverse_token is None:
+        if not cfg.debug:
             raise ValueError(
                 "No token provided and DATAVERSE_TOKEN not found in enviroment."
             )
-
+        else:
+            LOGGER.info("No token provided and debug=true. Skipping upload.")
+    else:
         upload_dataverse_data(
             zipfile,
             data_description,
             cfg.dataverse.baseurl,
             cfg.dataverse.pid,
             dataverse_token,
+            debug=cfg.debug,
         )
 
 

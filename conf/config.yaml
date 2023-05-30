@@ -22,11 +22,17 @@ spaceenv:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
 
+  seed: 42
 
-autogluon:
-  fit:
-    presets: medium_quality
+  autogluon:
+    fit:
+      presets: medium_quality
 
 num_plot_samples: 50
-seed: 42
 debug_subsample:  # for quicker debugging set to a small number
+
+hydra:
+  run:
+    dir: outputs/${spaceenv.base_name}
+  job:
+    chdir: true

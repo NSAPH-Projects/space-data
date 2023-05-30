@@ -1,0 +1,38 @@
+data_path: data/air_pollution_mortality.tab
+base_name: air_pollution_mortality
+index_col: 0
+treatment: qd_mean_pm25
+outcome: cdc_mortality_pct
+graph_path: data/counties.graphml
+has_coordinates: true
+autogluon:
+  fit:
+    presets: high_quality
+covariates:
+  - cs_poverty
+  - cs_hispanic
+  - cs_black
+  - cs_white
+  - cs_native
+  - cs_asian
+  - cs_ed_below_highschool
+  - cs_household_income
+  - cs_median_house_value
+  - cs_other
+  - cs_population_density
+  - cdc_mean_bmi
+  - cdc_pct_cusmoker
+  - cdc_pct_sdsmoker
+  - cdc_pct_fmsmoker
+  - cdc_pct_nvsmoker
+  - cdc_pct_nnsmoker
+  - gmet_mean_summer_tmmn
+  - gmet_mean_winter_tmmn
+  - gmet_mean_summer_tmmx
+  - gmet_mean_winter_tmmx
+  - gmet_mean_summer_rmn
+  - gmet_mean_winter_rmn
+  - gmet_mean_summer_rmx
+  - gmet_mean_winter_rmx
+  - gmet_mean_summer_sph
+  - gmet_mean_winter_sph

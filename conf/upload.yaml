@@ -2,9 +2,11 @@ defaults:
   - _self_
   - space_dataverse.yaml
 
-train_output_path: ???
+base_name: ???
 debug: false  # when debug is true, the script will not upload to dataverse
 
 hydra:
+  run:
+    dir: uploads/${base_name}
   job:
-    chdir: false
+    chdir: true
