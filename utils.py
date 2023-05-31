@@ -1,3 +1,4 @@
+import re
 import numpy as np
 import pandas as pd
 import os
@@ -91,21 +92,23 @@ def scale_variable(
 
 
 def transform_variable(
-    x: np.ndarray, transform: Literal["log", "symlog", "logit"] = None
+    x: np.ndarray, transform: Literal["log", "symlog", "logit"] | None = None
 ) -> np.ndarray:
     """Transforms a variable according to the specified transform."""
     if transform is None:
         return x
-
-    match transform:
-        case "log":
-            return np.log(x)
-        case "symlog":
-            return np.sign(x) * np.log(np.abs(x))
-        case "logit":
-            return np.log(x / (1 - x))
-        case _:
-            raise ValueError(f"Unknown transform: {transform}")
+    elif transform == "log":
+        return np.log(x)
+    elif transform == "symlog":
+        return np.sign(x) * np.log(np.abs(x))
+    elif transform == "logit":
+        return np.log(x / (1 - x))
+    elif transform.startswith("binary"):
+        # regex to extract what's inside the parentheses, e.g., binary(10) -> 10
+        cut_value = float(re.search(r"\((.*?)\)", transform).group(1))
+        return np.where(x < cut_value, 0.0, 1.0)
+    else:
+        raise ValueError(f"Unknown transform: {transform}")
 
 
 def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
