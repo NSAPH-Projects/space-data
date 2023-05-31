@@ -40,6 +40,7 @@ def upload_dataverse_data(
     dataverse_baseurl: str,
     dataverse_pid: str,
     dataverse_token: str,
+    dataset_publish: bool = False,
     debug: bool = False,
 ):
     """
@@ -68,6 +69,12 @@ def upload_dataverse_data(
         resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
         if resp.json()["status"] == "OK":
             LOGGER.info("Dataset uploaded.")
+
+        if dataset_publish:
+            resp = api.publish_dataset(dataverse_pid, release_type="major")
+            if resp.json()["status"] == "OK":
+                LOGGER.info("Dataset published.")
+
         else:
             LOGGER.error("Dataset not uploaded.")
             LOGGER.error(resp.json())
