@@ -186,6 +186,7 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "confounding_score": confounding_score.to_dict(),
         "spatial_scores": moran_I_values,
+        "feature_importance": featimp.importance.sort_values(ascending=False).to_dict(),
         "covariates": list(X.columns),
         "tretment_values": avals.tolist(),
     }
