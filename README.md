@@ -39,7 +39,7 @@ export DATAVERSE_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 python upload.py base_name=<base_name>
 ```
 
-
+Use the flag `debug=true` for debugging without uploading the dataset.
 
 ## Add new datasets
 
