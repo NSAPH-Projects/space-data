@@ -17,16 +17,23 @@ spaceenv:
   scaling:  # scaling done before transforms
     outcome:  # unit, standard
     treatment:  # unit, standard
+    covariates:
 
   transforms:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
+    covariates:
 
   seed: 42
 
   autogluon:
     fit:
-      presets: medium_quality
+      presets: high_quality
+      # seed: ${spaceenv.seed}
+
+  spatial_tuning:  
+    frac: 0.02  # usually this will cover 35% of the nodes for tuning
+    levels: 2
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number

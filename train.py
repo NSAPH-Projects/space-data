@@ -94,22 +94,74 @@ def main(cfg: DictConfig):
 
     # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
+    # TODO: improve the syntax for transforms with covariates
     logger.info(f"Transforming data.")
-    for tgt in ["treatment", "outcome"]:
+    for tgt in ["treatment", "outcome", "covariates"]:
         scaling = getattr(spaceenv.scaling, tgt)
         transform = getattr(spaceenv.transforms, tgt)
-        varname = getattr(spaceenv, tgt)
-        if scaling is not None:
-            logger.info(f"Scaling {varname} with {scaling}")
-            df[varname] = scale_variable(df[varname].values, scaling)
-        if transform is not None:
-            logger.info(f"Transforming {varname} with {transform}")
-            df[varname] = transform_variable(df[varname].values, transform)
+        varnames = getattr(spaceenv, tgt)
+        if tgt != "covariates":
+            varnames = [varnames]
+        for varname in varnames:
+            if scaling is not None:
+                if isinstance(scaling, (dict, DictConfig)):
+                    scaling_ = scaling[varname]
+                else:
+                    scaling_ = scaling
+                logger.info(f"Scaling {varname} with {scaling_}")
+                df[varname] = scale_variable(df[varname].values, scaling_)
+            if transform is not None:
+                if isinstance(transform, (dict, DictConfig)):
+                    transform_ = transform[varname]
+                else:
+                    transform_ = transform
+                logger.info(f"Transforming {varname} with {transform_}")
+                df[varname] = transform_variable(df[varname].values, transform_)
+
+    # == Spatial Train/Test Split ===
+    if spaceenv.spatial_tuning.frac > 0:
+        levels = spaceenv.spatial_tuning.levels
+        logger.info(f"Selecting tunning split removing {levels} nbrs from val. pts.")
+
+        # make dict of neighbors from graph
+        node_list = np.array(graph.nodes())
+        node2ix = {node: i for i, node in enumerate(node_list)}
+        nbrs = {node: set(graph.neighbors(node)) for node in node_list}
+
+        # first find the centroid of the tuning subgraph
+        num_tuning_centroids = int(spaceenv.spatial_tuning.frac * df.shape[0])
+        tuning_centroids = np.random.choice(
+            df.shape[0], size=num_tuning_centroids, replace=False
+        )
+        tuning_centroids = set(node_list[tuning_centroids])
+
+        # not remove all neighbors of the tuning centroids from the training data
+        for _ in range(levels):
+            tmp = tuning_centroids.copy()
+            for node in tmp:
+                for nbr in nbrs[node]:
+                    tuning_centroids.add(nbr)
+        tuning_centroids = list(tuning_centroids)
+
+        # split data into tuning and training
+        tuning_indices = np.zeros(df.shape[0], dtype=bool)
+        tuning_indices[[node2ix[node] for node in tuning_centroids]] = True
+        tuning_data = TabularDataset(df[tuning_indices])
+        train_data = TabularDataset(df[~tuning_indices])
+        tnfrac = 100 * len(tuning_centroids) / df.shape[0]
+        logger.info(f"...{tnfrac:.2f}% of the rows used for tuning split.")
+    else:
+        tuning_data = None
 
     # === Model fitting ===
     logger.info(f"Fitting model to outcome variable.")
     trainer = TabularPredictor(label=spaceenv.outcome)
-    predictor = trainer.fit(train_data, **spaceenv.autogluon.fit)
+    predictor = trainer.fit(
+        train_data,
+        **spaceenv.autogluon.fit,
+        tuning_data=tuning_data,
+        use_bag_holdout=(spaceenv.spatial_tuning.frac > 0),
+    )
     featimp = predictor.feature_importance(train_data)
     results = predictor.fit_summary()
     mu = predictor.predict(df)
@@ -117,8 +169,9 @@ def main(cfg: DictConfig):
 
     # inject noise
     logger.info(f"Generating synthetic residuals for synthetic outcome.")
-    fit_residuals = dftrain[spaceenv.outcome] - predictor.predict(train_data)
-    synth_residuals = generate_noise_like(fit_residuals, graph)
+    mu_synth = predictor.predict(df)
+    residuals = df[spaceenv.outcome] - mu_synth
+    synth_residuals = generate_noise_like(residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
 
@@ -208,7 +261,7 @@ def main(cfg: DictConfig):
 
     logger.info("Plotting histogram of true and synthetic residuals.")
     fig, ax = plt.subplots(figsize=(4, 3))
-    ax.hist(fit_residuals, bins=20, density=True, alpha=0.5, label="True")
+    ax.hist(residuals, bins=20, density=True, alpha=0.5, label="True")
     ax.hist(synth_residuals, bins=20, density=True, alpha=0.5, label="Synthetic")
     ax.set_xlabel("Residuals")
     ax.set_ylabel("Density")
