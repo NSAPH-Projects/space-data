@@ -266,14 +266,12 @@ def main(cfg: DictConfig):
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
     ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
 
-    if mu_cf.shape[1] == 2:
-        # Draw a line for the ATE
-        control_mean = mu_cf.iloc[:,0].mean()
-        treatment_mean = mu_cf.iloc[:,1].mean()
-        ax.plot(
-            avals, [control_mean, treatment_mean], color='red', 
-            linestyle='--', label='Average Treatment Effect', alpha=0.5)
-        ax.legend()
+    # Draw a line for the ATE
+    ax.plot(
+        avals, mu_cf.mean(), color='red', 
+        linestyle='--', label='Average Treatment Effect', alpha=0.5)
+    ax.legend()
+
     ax.set_xlabel(spaceenv.treatment)
     ax.set_ylabel(spaceenv.outcome)
     ax.set_title("Counterfactuals")
