@@ -5,6 +5,7 @@ import os
 import shutil
 from zipfile import ZipFile
 from typing import Literal
+from omegaconf.listconfig import ListConfig
 import logging
 import networkx as nx
 from scipy.linalg import cholesky, solve_triangular
@@ -92,10 +93,16 @@ def scale_variable(
 
 
 def transform_variable(
-    x: np.ndarray, transform: Literal["log", "symlog", "logit"] | None = None
+    x: np.ndarray,
+    transform: list[str] | Literal["log", "symlog", "logit"] | None = None,
 ) -> np.ndarray:
     """Transforms a variable according to the specified transform."""
     if transform is None:
+        return x
+    elif isinstance(transform, (list, ListConfig)):
+        # call recursively
+        for t in transform:
+            x = transform_variable(x, t)
         return x
     elif transform == "log":
         return np.log(x)
@@ -107,6 +114,11 @@ def transform_variable(
         # regex to extract what's inside the parentheses, e.g., binary(10) -> 10
         cut_value = float(re.search(r"\((.*?)\)", transform).group(1))
         return np.where(x < cut_value, 0.0, 1.0)
+    elif transform.startswith("gaussian_noise"):
+        # regex to extract what's inside the parentheses, e.g., gaussian_noise(0.1) -> 0.1
+        scaler = float(re.search(r"\((.*?)\)", transform).group(1))
+        sig = np.nanstd(x)
+        return x + np.random.normal(0, sig * scaler, x.shape)
     else:
         raise ValueError(f"Unknown transform: {transform}")
 
@@ -157,7 +169,7 @@ def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
     return best_lam
 
 
-def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
+def generate_noise_like_by_penalty(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     """Injects noise into residuals using a Gaussian Markov Random Field."""
     # find best smoothness param from penalized likelihood
     res_sig = np.nanstd(x)
@@ -176,8 +188,36 @@ def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     return noise
 
 
+def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
+    """Injects noise into residuals using a Gaussian Markov Random Field."""
+    # find average correlation between a point and its neighbors mean
+    nbrs2ix = {n: i for i, n in enumerate(x.index)}
+    nbrs = [[nbrs2ix[i] for i in nx.neighbors(graph, n)] for n in x.index]
+    x_ = x.values
+    nbr_means = np.array([np.nanmean(x_[nbrs[i]]) for i in range(len(x))])
+    x__ = (x_ - np.nanmean(x_)) / np.nanstd(x_)
+    nbr_means_ = (nbr_means - np.nanmean(nbr_means)) / np.nanstd(nbr_means)
+    corr = np.nansum(x__ * nbr_means_) / len(x)
+
+    # scaled graph laplacian
+    Q = nx.laplacian_matrix(graph).toarray() / np.mean([len(n) for n in nbrs])
+
+    # add variance to diagonal
+    Q = corr * Q + (1 - corr + 1e-4) * np.eye(Q.shape[0])
+    LOGGER.info(f"Residual neighbor correlation: {corr:.4f}")
+
+    # sample from GMRF
+    Z = np.random.randn(Q.shape[0])
+    L = cholesky(Q, lower=True)
+    noise = solve_triangular(L, Z, lower=True).T
+
+    # scale noise to have same variance as residuals
+    noise = noise / noise.std() * np.nanstd(x)
+
+    return noise
+
+
 def moran_I(x: pd.Series, A: np.ndarray) -> float:
-    # Get the adjacency graph corresponding to the index of x
     x = x.values
 
     # input the mean of x when there nan values
