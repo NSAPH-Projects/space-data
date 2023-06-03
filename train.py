@@ -153,13 +153,9 @@ def main(cfg: DictConfig):
                     buffer_nodes.add(nbr)
         buffer_nodes = list(set(buffer_nodes))
 
-        # split data into tuning and training
-        tuning_indices = np.zeros(df.shape[0], dtype=bool)
-        tuning_indices[[node2ix[node] for node in tuning_nodes]] = True
-        buffer_indices = np.zeros(df.shape[0], dtype=bool)
-        buffer_indices[[node2ix[node] for node in buffer_nodes]] = True
-        tuning_data = TabularDataset(df.loc[tuning_indices])
-        train_data = TabularDataset(df[~buffer_indices])
+        # split data into tuning and trainingå
+        tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)])
+        train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)])
         tunefrac = 100 * len(tuning_nodes) / df.shape[0]
         trainfrac = 100 * len(train_data) / df.shape[0]
         logger.info(f"...{tunefrac:.2f}% of the rows used for tuning split.")
