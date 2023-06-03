@@ -249,6 +249,7 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "confounding_score": confounding_score.to_dict(),
         "spatial_scores": moran_I_values,
+        "feature_importance": featimp.importance.sort_values(ascending=False).to_dict(),
         "covariates": list(X.columns),
         "treatment_values": avals.tolist(),
     }
@@ -264,6 +265,13 @@ def main(cfg: DictConfig):
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
     ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
+
+    # Draw a line for the ATE
+    ax.plot(
+        avals, mu_cf.mean(), color='red', 
+        linestyle='--', label='Average Treatment Effect', alpha=0.5)
+    ax.legend()
+
     ax.set_xlabel(spaceenv.treatment)
     ax.set_ylabel(spaceenv.outcome)
     ax.set_title("Counterfactuals")

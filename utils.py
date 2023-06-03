@@ -41,6 +41,7 @@ def upload_dataverse_data(
     dataverse_baseurl: str,
     dataverse_pid: str,
     dataverse_token: str,
+    dataset_publish: bool = False,
     debug: bool = False,
 ):
     """
@@ -72,6 +73,12 @@ def upload_dataverse_data(
         else:
             LOGGER.error("Dataset not uploaded.")
             LOGGER.error(resp.json())
+
+        if dataset_publish:
+            resp = api.publish_dataset(dataverse_pid, release_type="major")
+            if resp.json()["status"] == "OK":
+                LOGGER.info("Dataset published.")
+
     else:
         LOGGER.info("Debug mode. Dataset not uploaded.")
 
@@ -119,6 +126,10 @@ def transform_variable(
         scaler = float(re.search(r"\((.*?)\)", transform).group(1))
         sig = np.nanstd(x)
         return x + np.random.normal(0, sig * scaler, x.shape)
+    elif transform.startswith("qbinary"):
+        value = float(re.search(r"\((.*?)\)", transform).group(1))
+        quantile = np.quantile(x, value)
+        return np.where(x < quantile, 0.0, 1.0)
     else:
         raise ValueError(f"Unknown transform: {transform}")
 
