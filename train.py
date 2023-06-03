@@ -121,6 +121,7 @@ def main(cfg: DictConfig):
     # == Spatial Train/Test Split ===
     if spaceenv.spatial_tuning.frac > 0:
         levels = spaceenv.spatial_tuning.levels
+        buffer_size = spaceenv.spatial_tuning.buffer
         logger.info(f"Selecting tunning split removing {levels} nbrs from val. pts.")
 
         # make dict of neighbors from graph
@@ -130,26 +131,39 @@ def main(cfg: DictConfig):
 
         # first find the centroid of the tuning subgraph
         num_tuning_centroids = int(spaceenv.spatial_tuning.frac * df.shape[0])
-        tuning_centroids = np.random.choice(
+        tuning_nodes = np.random.choice(
             df.shape[0], size=num_tuning_centroids, replace=False
         )
-        tuning_centroids = set(node_list[tuning_centroids])
+        tuning_nodes = set(node_list[tuning_nodes])
 
         # not remove all neighbors of the tuning centroids from the training data
         for _ in range(levels):
-            tmp = tuning_centroids.copy()
+            tmp = tuning_nodes.copy()
             for node in tmp:
                 for nbr in nbrs[node]:
-                    tuning_centroids.add(nbr)
-        tuning_centroids = list(tuning_centroids)
+                    tuning_nodes.add(nbr)
+        tuning_nodes = list(tuning_nodes)
+
+        # buffer
+        buffer_nodes = set(tuning_nodes.copy())
+        for _ in range(buffer_size):
+            tmp = buffer_nodes.copy()
+            for node in tmp:
+                for nbr in nbrs[node]:
+                    buffer_nodes.add(nbr)
+        buffer_nodes = list(set(buffer_nodes))
 
         # split data into tuning and training
         tuning_indices = np.zeros(df.shape[0], dtype=bool)
-        tuning_indices[[node2ix[node] for node in tuning_centroids]] = True
-        tuning_data = TabularDataset(df[tuning_indices])
-        train_data = TabularDataset(df[~tuning_indices])
-        tnfrac = 100 * len(tuning_centroids) / df.shape[0]
-        logger.info(f"...{tnfrac:.2f}% of the rows used for tuning split.")
+        tuning_indices[[node2ix[node] for node in tuning_nodes]] = True
+        buffer_indices = np.zeros(df.shape[0], dtype=bool)
+        buffer_indices[[node2ix[node] for node in buffer_nodes]] = True
+        tuning_data = TabularDataset(df.loc[tuning_indices])
+        train_data = TabularDataset(df[~buffer_indices])
+        tunefrac = 100 * len(tuning_nodes) / df.shape[0]
+        trainfrac = 100 * len(train_data) / df.shape[0]
+        logger.info(f"...{tunefrac:.2f}% of the rows used for tuning split.")
+        logger.info(f"...{trainfrac:.2f}% of the rows used for training.")
     else:
         tuning_data = None
 
@@ -241,7 +255,7 @@ def main(cfg: DictConfig):
         "spatial_scores": moran_I_values,
         "feature_importance": featimp.importance.sort_values(ascending=False).to_dict(),
         "covariates": list(X.columns),
-        "tretment_values": avals.tolist(),
+        "treatment_values": avals.tolist(),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)

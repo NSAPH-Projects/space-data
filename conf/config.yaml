@@ -28,12 +28,12 @@ spaceenv:
 
   autogluon:
     fit:
-      presets: high_quality
-      # seed: ${spaceenv.seed}
+      presets: best_quality
 
   spatial_tuning:  
     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-    levels: 2
+    levels: 1
+    buffer: 1
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
