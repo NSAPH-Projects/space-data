@@ -1,20 +1,22 @@
 data_path: data/air_pollution_mortality.tab
-base_name: air_pollution_mortality
+base_name: healthd_dmgrcs_mortality_disc
 index_col: 0
-treatment: qd_mean_pm25
+treatment: cs_white
 outcome: cdc_mortality_pct
 graph_path: data/counties.graphml
 has_coordinates: true
+transforms:
+   treatment: qbinary(0.60)
+spatial_tuning:  
+     frac: 0.02  # usually this will cover 35% of the nodes for tuning
+     levels: 2
 autogluon:
   fit:
-    presets: high_quality
+    time_limit: 180
+    presets: best_quality
 covariates:
+  - qd_mean_pm25
   - cs_poverty
-  - cs_hispanic
-  - cs_black
-  - cs_white
-  - cs_native
-  - cs_asian
   - cs_ed_below_highschool
   - cs_household_income
   - cs_median_house_value
@@ -26,13 +28,21 @@ covariates:
   - cdc_pct_fmsmoker
   - cdc_pct_nvsmoker
   - cdc_pct_nnsmoker
+  - gmet_mean_tmmn
   - gmet_mean_summer_tmmn
   - gmet_mean_winter_tmmn
+  - gmet_mean_tmmx
   - gmet_mean_summer_tmmx
   - gmet_mean_winter_tmmx
+  - gmet_mean_rmn
   - gmet_mean_summer_rmn
   - gmet_mean_winter_rmn
+  - gmet_mean_rmx
   - gmet_mean_summer_rmx
   - gmet_mean_winter_rmx
+  - gmet_mean_sph
   - gmet_mean_summer_sph
   - gmet_mean_winter_sph
+  - bin_NORTHEAST
+  - bin_SOUTH
+  - bin_WEST
