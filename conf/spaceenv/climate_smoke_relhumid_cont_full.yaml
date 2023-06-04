@@ -1,18 +1,10 @@
 data_path: data/climate_exposure_ca_2020.tab
-base_name: climate_relhum_wfsmoke_cont 
+base_name: climate_smoke_relhumid_cont_full
 index_col: 0
 treatment: avg_rhum_jun 
 outcome: avg_smoke_pm_jun
 graph_path: data/ca_tracts.graphml
 has_coordinates: true
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
-# DONE
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
 covariates:
   - avg_tmax_jun
   - avg_tmax_jul
@@ -24,3 +16,14 @@ covariates:
   - avg_wnd_aug
   - avg_wnd_sep
   - avg_wnd_oct
+  - POPULATION_2020
+  - POP20_SQMI
+  - EP_POV150
+  - EP_UNEMP
+  - EP_UNINSUR
+  - EP_AGE65
+  - EP_AGE17
+  - EP_LIMENG
+  - EP_MINRTY
+  - RPL_THEMES
+  - E_NOINT

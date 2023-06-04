@@ -1,0 +1,16 @@
+data_path: data/climate_exposure_ca_2020.tab
+base_name: climate_smoke_relhumid_cont
+index_col: 0
+treatment: avg_rhum_jun 
+outcome: avg_smoke_pm_jun
+graph_path: data/ca_tracts.graphml
+has_coordinates: true
+transforms:
+  treatment: gaussian_noise(0.5)
+  outcome: gaussian_noise(0.5)  # in terms of standard deviations
+autogluon:
+  fit:
+    presets: best_quality
+covariates:
+  - avg_tmax_jun
+  - avg_wnd_jun 

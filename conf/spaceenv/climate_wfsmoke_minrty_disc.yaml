@@ -1,4 +1,4 @@
-data_path: data/climate_exposure_ca_2020.csv
+data_path: data/climate_exposure_ca_2020.tab
 base_name: climate_wfsmoke_minrty_disc
 index_col: 0
 treatment: avg_smoke_pm_jul 

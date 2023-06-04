@@ -1,5 +1,5 @@
 base_name: climate_exposure_ca
-data_path: data/climate_exposure_ca_2020.csv
+data_path: data/climate_exposure_ca_2020.tab
 graph_path: data/ca_tracts.graphml
 outcome: avg_temp_jun
 treatment: avg_rhum_jun

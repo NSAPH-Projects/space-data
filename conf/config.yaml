@@ -31,7 +31,7 @@ spaceenv:
       presets: best_quality
 
   spatial_tuning:  
-    frac: 0.02  # usually this will cover 35% of the nodes for tuning
+    frac: 0.05  # usually this will cover 35% of the nodes for tuning
     levels: 1
     buffer: 1
 
