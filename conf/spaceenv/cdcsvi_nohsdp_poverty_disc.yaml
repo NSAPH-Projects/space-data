@@ -1,5 +1,5 @@
 data_path: data/cdcatsdrsvi_tx.tab
-base_name: cdcsvi_nohsdp_poverty_cont
+base_name: cdcsvi_nohsdp_poverty_disc
 index_col: 0
 treatment: EP_NOHSDP
 outcome: EP_POV150
