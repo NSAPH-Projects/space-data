@@ -69,30 +69,7 @@ def main(cfg: DictConfig):
         covariates = list(df.columns.difference([spaceenv.treatment, spaceenv.outcome]))
     df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
 
-    # read graphml
-    logger.info(f"Reading graph from {spaceenv.graph_path}")
-    graph = nx.read_graphml(f"{owd}/{spaceenv.graph_path}")
-
-    # test with a subset of the data
-    if cfg.debug_subsample is not None:
-        n = cfg.debug_subsample
-        ix = np.random.choice(n, 100, replace=False)
-        df = df.iloc[ix]
-
-    # keep intersectio of nodes in graph and data
-    intersection = set(df.index).intersection(set(graph.nodes))
-    n = len(intersection)
-    perc = 100 * n / len(df)
-    logger.info(f"Homegenizing data and graph")
-    logger.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
-    graph = nx.subgraph(graph, intersection)
-    df = df.loc[intersection]
-
-    # remove nans from training data
-    dftrain = df[~np.isnan(df[spaceenv.outcome])]
-    train_data = TabularDataset(dftrain)
-
-    # get treatment and outcome and
+   # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     # TODO: improve the syntax for transforms with covariates
     logger.info(f"Transforming data.")
@@ -117,6 +94,33 @@ def main(cfg: DictConfig):
                     transform_ = transform
                 logger.info(f"Transforming {varname} with {transform_}")
                 df[varname] = transform_variable(df[varname].values, transform_)
+    
+    # make treatment boolean if only two values
+    if df[spaceenv.treatment].nunique() == 2:
+        df[spaceenv.treatment] = df[spaceenv.treatment].astype(bool)
+
+    # read graphml
+    logger.info(f"Reading graph from {spaceenv.graph_path}")
+    graph = nx.read_graphml(f"{owd}/{spaceenv.graph_path}")
+
+    # test with a subset of the data
+    if cfg.debug_subsample is not None:
+        n = cfg.debug_subsample
+        ix = np.random.choice(n, 100, replace=False)
+        df = df.iloc[ix]
+
+    # keep intersectio of nodes in graph and data
+    intersection = set(df.index).intersection(set(graph.nodes))
+    n = len(intersection)
+    perc = 100 * n / len(df)
+    logger.info(f"Homegenizing data and graph")
+    logger.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
+    graph = nx.subgraph(graph, intersection)
+    df = df.loc[intersection]
+
+    # remove nans from training data
+    dftrain = df[~np.isnan(df[spaceenv.outcome])]
+    train_data = TabularDataset(dftrain)
 
     # == Spatial Train/Test Split ===
     if spaceenv.spatial_tuning.frac > 0:
