@@ -12,12 +12,10 @@ autogluon:
     time_limit: 180
     presets: best_quality
 spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
+     frac: 0.05
+     levels: 1
+     buffer: 1
 covariates:
-  - E_TOTPOP
-  - E_HU
-  - E_HH
   - EP_UNEMP
   - EP_AGE65
   - EP_AGE17
