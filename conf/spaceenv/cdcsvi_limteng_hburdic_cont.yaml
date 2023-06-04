@@ -1,4 +1,4 @@
-data_path: data/cdcatsdrsvi_tx.csv
+data_path: data/cdcatsdrsvi_tx.tab
 base_name: cdcsvi_limteng_hburdic_cont
 index_col: 0
 treatment: EP_LIMENG 

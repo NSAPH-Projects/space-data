@@ -1,0 +1,39 @@
+
+data_path: data/cdcatsdrsvi_tx.tab
+base_name: cdcsvi_populat_housing_cont
+index_col: 0
+treatment: E_TOTPOP
+outcome: E_HU
+graph_path: data/tx_tracts.graphml
+has_coordinates: true
+transforms:
+  treatment:
+    - log
+    - gaussian_noise(0.1)
+  outcome: gaussian_noise(0.1)  # in terms of standard deviations
+# autogluon:
+#   fit:
+#     presets: best_quality
+#     time_limit: 20
+#     holdout_frac: 0.1 
+#     num_stack_levels: 0
+#     num_bag_folds: 0
+    # use_bag_holdout: True
+    # excluded_model_types: KNN,  XT,  GBM, CAT, XGB, RF
+covariates:
+  - EP_POV150
+  - EP_UNEMP
+  - EP_HBURD
+  - EP_NOHSDP
+  - EP_UNINSUR
+  - EP_AGE65
+  - EP_AGE17
+  - EP_DISABL
+  - EP_SNGPNT
+  - EP_LIMENG
+  - EP_MINRTY
+  - EP_MUNIT
+  - EP_NOVEH
+  - EP_NOINT
+
+

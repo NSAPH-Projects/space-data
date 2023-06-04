@@ -1,4 +1,4 @@
-data_path: data/counties_election.csv
+data_path: data/counties_election.tab
 base_name: county_phyactiv_lifexpcy_cont
 index_col: 0
 treatment: health_phy_inactive_pct
