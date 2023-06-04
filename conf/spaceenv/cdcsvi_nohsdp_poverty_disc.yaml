@@ -5,6 +5,8 @@ treatment: EP_NOHSDP
 outcome: EP_POV150
 graph_path: data/tx_tracts.graphml
 has_coordinates: true
+transforms:
+  treatment: qbinary(0.5)
 #scale:
 #    treatment: standard # log #, symlog, logit
 autogluon:
