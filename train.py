@@ -69,7 +69,7 @@ def main(cfg: DictConfig):
         covariates = list(df.columns.difference([spaceenv.treatment, spaceenv.outcome]))
     df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
 
-   # get treatment and outcome and
+    # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     # TODO: improve the syntax for transforms with covariates
     logger.info(f"Transforming data.")
@@ -94,7 +94,7 @@ def main(cfg: DictConfig):
                     transform_ = transform
                 logger.info(f"Transforming {varname} with {transform_}")
                 df[varname] = transform_variable(df[varname].values, transform_)
-    
+
     # make treatment boolean if only two values
     if df[spaceenv.treatment].nunique() == 2:
         df[spaceenv.treatment] = df[spaceenv.treatment].astype(bool)
@@ -130,7 +130,6 @@ def main(cfg: DictConfig):
 
         # make dict of neighbors from graph
         node_list = np.array(graph.nodes())
-        node2ix = {node: i for i, node in enumerate(node_list)}
         nbrs = {node: set(graph.neighbors(node)) for node in node_list}
 
         # first find the centroid of the tuning subgraph
@@ -190,17 +189,17 @@ def main(cfg: DictConfig):
     Y_synth.name = "Y_synth"
 
     logger.info(f"Fitting model to treatment variable for confounding score.")
-    treatment_trainer = TabularPredictor(label=spaceenv.treatment)
-    treatment_train_data = TabularDataset(
+    treat_trainer = TabularPredictor(label=spaceenv.treatment)
+    treat_train_data = TabularDataset(
         dftrain[dftrain.columns.difference([spaceenv.outcome])]
     )
-    treatment_predictor = treatment_trainer.fit(
-        treatment_train_data, **spaceenv.autogluon.fit
-    )
-    treatment_featimp = treatment_predictor.feature_importance(treatment_train_data)
-    outcome_featimp = featimp.loc[treatment_featimp.index]
+    treat_predictor = treat_trainer.fit(treat_train_data, **spaceenv.autogluon.fit)
+    yscale = np.nanstd(df[spaceenv.outcome])
+    tscale = np.nanstd(df[spaceenv.treatment])
+    treat_featimp = treat_predictor.feature_importance(treat_train_data) / tscale
+    outcome_featimp = featimp.loc[treat_featimp.index] / yscale
     confounding_score = np.minimum(
-        outcome_featimp.importance, treatment_featimp.importance
+        outcome_featimp.importance, treat_featimp.importance
     ).sort_values(ascending=False)
 
     # === Counterfactual generation ===
@@ -253,7 +252,10 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "confounding_score": confounding_score.to_dict(),
         "spatial_scores": moran_I_values,
-        "feature_importance": featimp.importance.sort_values(ascending=False).to_dict(),
+        "outcome_importance": featimp.importance.sort_values(ascending=False).to_dict(),
+        "treatment_importance": treat_featimp.importance.sort_values(
+            ascending=False
+        ).to_dict(),
         "covariates": list(X.columns),
         "treatment_values": avals.tolist(),
     }
@@ -272,8 +274,13 @@ def main(cfg: DictConfig):
 
     # Draw a line for the ATE
     ax.plot(
-        avals, mu_cf.mean(), color='red', 
-        linestyle='--', label='Average Treatment Effect', alpha=0.5)
+        avals,
+        mu_cf.mean(),
+        color="red",
+        linestyle="--",
+        label="Average Treatment Effect",
+        alpha=0.5,
+    )
     ax.legend()
 
     ax.set_xlabel(spaceenv.treatment)

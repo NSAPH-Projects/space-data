@@ -10,9 +10,8 @@ spaceenv:
   covariates: null
   outcome: ???
   treament: ???
-  index_col: null # can overwrite
+  index_col: 0
   treatment_max_bins: 100  # for binary bins will be 2
-  has_coordinates: ???
 
   scaling:  # scaling done before transforms
     outcome:  # unit, standard
@@ -29,6 +28,7 @@ spaceenv:
   autogluon:
     fit:
       presets: best_quality
+      time_limit: 30
 
   spatial_tuning:  
     frac: 0.05  # usually this will cover 35% of the nodes for tuning

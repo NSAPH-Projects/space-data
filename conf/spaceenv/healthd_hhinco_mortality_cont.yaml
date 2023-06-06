@@ -1,21 +1,8 @@
 data_path: data/air_pollution_mortality.tab
 base_name: healthd_hhinco_mortality_cont
-index_col: 0
 treatment: cs_household_income
 outcome: cdc_mortality_pct
 graph_path: data/counties.graphml
-has_coordinates: true
-# scale:
-#     treatment: log #, symlog, logit
-# transforms:
-#   treatment: qbinary(0.5)
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - qd_mean_pm25
   - cs_poverty

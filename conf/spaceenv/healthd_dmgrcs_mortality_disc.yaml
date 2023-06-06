@@ -1,19 +1,10 @@
 data_path: data/air_pollution_mortality.tab
 base_name: healthd_dmgrcs_mortality_disc
-index_col: 0
 treatment: cs_white
 outcome: cdc_mortality_pct
 graph_path: data/counties.graphml
-has_coordinates: true
 transforms:
    treatment: qbinary(0.60)
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - qd_mean_pm25
   - cs_poverty

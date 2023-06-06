@@ -1,14 +1,8 @@
 data_path: data/climate_exposure_ca_2020.tab
 base_name: climate_wfsmoke_minrty_disc
-index_col: 0
 treatment: avg_smoke_pm_jul 
 outcome: EP_MINRTY
 graph_path: data/ca_tracts.graphml
-has_coordinates: true
-autogluon:
-  fit:
-    presets: best_quality
-    time_limit: 180
 transforms:
   treatment: qbinary(0.5)
 spatial_tuning:  

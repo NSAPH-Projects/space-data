@@ -1,17 +1,8 @@
 data_path: data/counties_election.tab
 base_name: county_phyactiv_lifexpcy_cont
-index_col: 0
 treatment: health_phy_inactive_pct
 outcome: life-expectancy
 graph_path: data/counties.graphml
-has_coordinates: true
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - noaa_prcp
   - noaa_snow

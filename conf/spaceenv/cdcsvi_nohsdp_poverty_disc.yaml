@@ -2,19 +2,9 @@ data_path: data/cdcatsdrsvi_tx.tab
 base_name: cdcsvi_nohsdp_poverty_disc
 transforms:
   treatment: qbinary(0.5)
-index_col: 0
 treatment: EP_NOHSDP
 outcome: EP_POV150
 graph_path: data/tx_tracts.graphml
-transforms:
-  treatment: qbinary(0.5)
-has_coordinates: true
-#scale:
-#    treatment: standard # log #, symlog, logit
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - EP_UNEMP
   - EP_AGE65

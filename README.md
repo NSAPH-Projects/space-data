@@ -48,9 +48,22 @@ Add a config file in `conf/spaceenv`. Look at `conf/spaceenv/elect_dempct_colleg
 
 ## List of uploaded Space Envs
 
-List here the `base_name` of the uploaded `.yaml`. Include the specific config file only in case that the config file and base name is different.
+List of supported `SpaceEnvs`.
 
-- elect_dempct_college (continuous treatment)
+| Dataset                             | Treatment type   |
+| ----------------------------------- | ---------- |
+| healthd_dmgrcs_mortality_disc       | binary     |
+| cdcsvi_limteng_hburdic_cont         | continuous |
+| climate_relhum_wfsmoke_cont         | continuous |
+| climate_wfsmoke_minrty_disc         | binary     |
+| healthd_hhinco_mortality_cont        | continuous |
+| healthd_pollutn_mortality_cont       | continuous |
+| county_educatn_election_cont         | continuous |
+| county_phyactiv_lifexpcy_cont       | continuous |
+| county_dmgrcs_election_disc          | binary     |
+| cdcsvi_nohsdp_poverty_cont           | continuous |
+| cdcsvi_nohsdp_poverty_disc           | binary     |
+
 
 ## List of Raw Data Sources
 

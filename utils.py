@@ -130,6 +130,10 @@ def transform_variable(
         value = float(re.search(r"\((.*?)\)", transform).group(1))
         quantile = np.quantile(x, value)
         return np.where(x < quantile, 0.0, 1.0)
+    elif transform.startswith("affine"):
+        args = re.search(r"\((.*?)\)", transform).group(1)
+        b, m = [float(x) for x in args.split(",")]
+        return b + m * x
     else:
         raise ValueError(f"Unknown transform: {transform}")
 
