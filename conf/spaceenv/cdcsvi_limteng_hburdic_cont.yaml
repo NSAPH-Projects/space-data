@@ -1,21 +1,8 @@
 data_path: data/cdcatsdrsvi_tx.tab
 base_name: cdcsvi_limteng_hburdic_cont
-index_col: 0
 treatment: EP_LIMENG 
 outcome: EP_HBURD
 graph_path: data/tx_tracts.graphml
-has_coordinates: true
-# transforms:
-#   treatment: qbinary(0.5)  # in micrograms per meter cube
-#scale:
-#    treatment: standard # log #, symlog, logit
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
 covariates:
   - E_TOTPOP
   - E_HU

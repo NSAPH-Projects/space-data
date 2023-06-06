@@ -1,19 +1,8 @@
 data_path: data/counties_election.tab
 base_name: county_educatn_election_cont
-index_col: 0
 treatment: cs_ed_below_highschool 
 outcome: election_dem_pct
 graph_path: data/counties.graphml
-has_coordinates: true
-# transforms:
-#    treatment: qbinary(0.5)
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - noaa_prcp
   - noaa_snow
