@@ -1,0 +1,11 @@
+python upload.py base_name=healthd_dmgrcs_mortality_disc      
+python upload.py base_name=cdcsvi_limteng_hburdic_cont               
+python upload.py base_name=healthd_hhinco_mortality_cont       
+python upload.py base_name=healthd_pollutn_mortality_cont      
+python upload.py base_name=county_educatn_election_cont        
+python upload.py base_name=county_phyactiv_lifexpcy_cont      
+python upload.py base_name=county_dmgrcs_election_disc         
+python upload.py base_name=cdcsvi_nohsdp_poverty_cont          
+python upload.py base_name=cdcsvi_nohsdp_poverty_disc
+python upload.py base_name=climate_relhum_wfsmoke_cont        
+python upload.py base_name=climate_wfsmoke_minrty_disc 
