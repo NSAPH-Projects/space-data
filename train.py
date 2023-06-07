@@ -175,7 +175,7 @@ def main(cfg: DictConfig):
         tuning_data=tuning_data,
         use_bag_holdout=(spaceenv.spatial_tuning.frac > 0),
     )
-    featimp = predictor.feature_importance(train_data)
+    featimp = predictor.feature_importance(train_data, **spaceenv.autogluon.feat_importance)
     results = predictor.fit_summary()
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
@@ -196,7 +196,7 @@ def main(cfg: DictConfig):
     treat_predictor = treat_trainer.fit(treat_train_data, **spaceenv.autogluon.fit)
     yscale = np.nanstd(df[spaceenv.outcome])
     tscale = np.nanstd(df[spaceenv.treatment])
-    treat_featimp = treat_predictor.feature_importance(treat_train_data) / tscale
+    treat_featimp = treat_predictor.feature_importance(treat_train_data, **spaceenv.autogluon.feat_importance) / tscale
     outcome_featimp = featimp.loc[treat_featimp.index] / yscale
     confounding_score = np.minimum(
         outcome_featimp.importance, treat_featimp.importance

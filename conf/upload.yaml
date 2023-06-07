@@ -4,6 +4,7 @@ defaults:
 
 base_name: ???
 debug: false  # when debug is true, the script will not upload to dataverse
+publish: false  # when publish is true, the script will publish the dataset
 
 hydra:
   run:

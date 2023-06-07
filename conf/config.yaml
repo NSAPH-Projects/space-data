@@ -28,12 +28,14 @@ spaceenv:
   autogluon:
     fit:
       presets: best_quality
-      time_limit: 30
+      time_limit: 120
+    feat_importance:
+      time_limit: 180
 
   spatial_tuning:  
     frac: 0.05  # usually this will cover 35% of the nodes for tuning
-    levels: 1
-    buffer: 1
+    levels: 0
+    buffer: 2
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
