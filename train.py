@@ -11,13 +11,13 @@ import matplotlib.pyplot as plt
 from pytorch_lightning import seed_everything
 from autogluon.tabular import TabularDataset, TabularPredictor
 
-
 from utils import (
     transform_variable,
     scale_variable,
     generate_noise_like,
     moran_I,
     download_dataverse_data,
+    sort_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ def main(cfg: DictConfig):
     """
     # == Load config ===
     spaceenv = cfg.spaceenv
+    training_cfg = spaceenv.autogluon
 
     # === Data preparation ===
     # set seed
@@ -67,6 +68,7 @@ def main(cfg: DictConfig):
         covariates = spaceenv.covariates
     else:
         covariates = list(df.columns.difference([spaceenv.treatment, spaceenv.outcome]))
+    d = len(covariates)
     df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
 
     # get treatment and outcome and
@@ -98,6 +100,17 @@ def main(cfg: DictConfig):
     # make treatment boolean if only two values
     if df[spaceenv.treatment].nunique() == 2:
         df[spaceenv.treatment] = df[spaceenv.treatment].astype(bool)
+
+    # repeat the treatment column several times to allow for the probability
+    # of the ML autogluon models using the treatment as a feature
+    # Mathematically, it doesn't change the model space, but avoids the
+    # treatment effect getting lost.
+    if spaceenv.boost_treatment:
+        extra_cols = df[spaceenv.treatment].copy()
+        extra_cols = pd.concat([extra_cols] * (d - 1), axis=1)
+        extra_colnames = [f"boosted_treatment_{i:02d}" for i in range(d - 1)]
+        extra_cols.columns = extra_colnames
+        df = pd.concat([df, extra_cols], axis=1)
 
     # read graphml
     logger.info(f"Reading graph from {spaceenv.graph_path}")
@@ -171,11 +184,11 @@ def main(cfg: DictConfig):
     trainer = TabularPredictor(label=spaceenv.outcome)
     predictor = trainer.fit(
         train_data,
-        **spaceenv.autogluon.fit,
+        **training_cfg.fit,
         tuning_data=tuning_data,
         use_bag_holdout=(spaceenv.spatial_tuning.frac > 0),
     )
-    featimp = predictor.feature_importance(train_data)
+    featimp = predictor.feature_importance(train_data, **training_cfg.feat_importance)
     results = predictor.fit_summary()
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
@@ -190,17 +203,31 @@ def main(cfg: DictConfig):
 
     logger.info(f"Fitting model to treatment variable for confounding score.")
     treat_trainer = TabularPredictor(label=spaceenv.treatment)
-    treat_train_data = TabularDataset(
-        dftrain[dftrain.columns.difference([spaceenv.outcome])]
-    )
-    treat_predictor = treat_trainer.fit(treat_train_data, **spaceenv.autogluon.fit)
+    treat_train_data = TabularDataset(dftrain[covariates + [spaceenv.treatment]])
+    treat_predictor = treat_trainer.fit(treat_train_data, **training_cfg.fit)
+
+    # normalize feature importance by scale
     yscale = np.nanstd(df[spaceenv.outcome])
     tscale = np.nanstd(df[spaceenv.treatment])
-    treat_featimp = treat_predictor.feature_importance(treat_train_data) / tscale
-    outcome_featimp = featimp.loc[treat_featimp.index] / yscale
-    confounding_score = np.minimum(
-        outcome_featimp.importance, treat_featimp.importance
-    ).sort_values(ascending=False)
+    treat_featimp = treat_predictor.feature_importance(
+        treat_train_data, **training_cfg.feat_importance
+    )
+    treat_featimp = (treat_featimp / tscale).importance.to_dict()
+    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
+
+    # compute the specific importance of the treatment on the outcome model
+    outcome_featimp = (featimp / yscale).importance.to_dict()
+    outcome_featimp = {c: float(outcome_featimp.get(c, 0.0)) for c in covariates}
+
+    treat_importance_outcome_model = featimp.importance.loc[spaceenv.treatment]
+    if spaceenv.boost_treatment:
+        extra_importances = featimp.importance.loc[extra_colnames].to_list()
+        treat_importances_all = [treat_importance_outcome_model] + extra_importances
+        treat_importance_outcome_model = np.mean(treat_importances_all)
+    outcome_featimp["treatment"] = float(treat_importance_outcome_model)
+
+    # compute the confounding score
+    confounding_score = {k: min(treat_featimp[k], outcome_featimp[k]) for k in covariates}
 
     # === Counterfactual generation ===
     logger.info(f"Generating counterfactual predictions and adding residuals")
@@ -214,6 +241,8 @@ def main(cfg: DictConfig):
     for a in avals:
         cfdata = df.copy()
         cfdata[spaceenv.treatment] = a
+        if spaceenv.boost_treatment:
+            cfdata[extra_colnames] = a
         cfdata = TabularDataset(cfdata)
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
@@ -230,12 +259,6 @@ def main(cfg: DictConfig):
     adjmat = nx.adjacency_matrix(graph, nodelist=df.index).toarray()
     for c in covariates:
         moran_I_values[c] = moran_I(df[c], adjmat)
-    moran_I_values = {
-        k: v
-        for k, v in sorted(
-            moran_I_values.items(), key=lambda item: item[1], reverse=True
-        )
-    }
 
     # === Save results ===
     logger.info(f"Saving synthetic data, graph, and metadata")
@@ -250,14 +273,12 @@ def main(cfg: DictConfig):
         "treatment": spaceenv.treatment,
         "predicted_outcome": spaceenv.outcome,
         "synthetic_outcome": "Y_synth",
-        "confounding_score": confounding_score.to_dict(),
-        "spatial_scores": moran_I_values,
-        "outcome_importance": featimp.importance.sort_values(ascending=False).to_dict(),
-        "treatment_importance": treat_featimp.importance.sort_values(
-            ascending=False
-        ).to_dict(),
-        "covariates": list(X.columns),
-        "treatment_values": avals.tolist(),
+        "confounding_score": sort_dict(confounding_score),
+        "spatial_scores": sort_dict(moran_I_values),
+        "outcome_importance": sort_dict(outcome_featimp),
+        "treatment_importance": sort_dict(treat_featimp),
+        "covariates": list(covariates),
+        "treatment_values": list(avals),
     }
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)

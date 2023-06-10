@@ -3,8 +3,6 @@ base_name: climate_smoke_relhumid_cont
 treatment: avg_rhum_jun 
 outcome: avg_smoke_pm_jun
 graph_path: data/ca_tracts.graphml
-transforms:
-  outcome: affine(-200, 100)
 covariates:
   - avg_tmax_jun
   - avg_tmax_jul

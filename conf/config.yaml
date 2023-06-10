@@ -22,16 +22,22 @@ spaceenv:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
     covariates:
+  
+  boost_treatment: true  # replicate treatment cols during training
+  # boosting preserves the outcome of importance, it will be replicated
+  # as many times as other covariates are there.
 
   seed: 42
 
   autogluon:
     fit:
       presets: best_quality
-      time_limit: 30
+      time_limit: 300
+    feat_importance:
+      time_limit: 120
 
   spatial_tuning:  
-    frac: 0.05  # usually this will cover 35% of the nodes for tuning
+    frac: 0.02  # usually this will results 50 train, 16 val
     levels: 1
     buffer: 1
 
