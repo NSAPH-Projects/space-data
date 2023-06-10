@@ -2,6 +2,7 @@ import re
 import numpy as np
 import pandas as pd
 import os
+import json
 import shutil
 from zipfile import ZipFile
 from typing import Literal
@@ -56,31 +57,49 @@ def upload_dataverse_data(
 
     filename = os.path.basename(data_path)
 
-    dataverse_datafile = Datafile()
-    dataverse_datafile.set(
-        {
-            "pid": dataverse_pid,
-            "filename": filename,
-            "description": data_description,
-        }
-    )
-    LOGGER.info("File basename: " + filename)
-
-    if not debug:
+    
+    
+    dataset = api.get_dataset(dataverse_pid)
+    files_list = dataset.json()["data"]["latestVersion"]["files"]
+    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
+    filename_ = filename.replace(".zip.zip", ".zip")
+     
+    if filename_ not in file2id:
+        dataverse_datafile = Datafile()
+        dataverse_datafile.set(
+            {
+                "pid": dataverse_pid,
+                "filename": filename,
+                "description": data_description,
+            }
+        )
+        LOGGER.info("File basename: " + filename)
+        
         resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
         if resp.json()["status"] == "OK":
             LOGGER.info("Dataset uploaded.")
         else:
             LOGGER.error("Dataset not uploaded.")
             LOGGER.error(resp.json())
-
-        if dataset_publish:
-            resp = api.publish_dataset(dataverse_pid, release_type="major")
-            if resp.json()["status"] == "OK":
-                LOGGER.info("Dataset published.")
-
     else:
-        LOGGER.info("Debug mode. Dataset not uploaded.")
+        LOGGER.info("File already exists. Replacing it.")
+        
+        file_id = file2id[filename_]  
+        json_dict = {
+            "description": data_description,
+            "forceReplace": True,
+            "filename": filename,
+            #"label": filename,
+        }
+        json_str = json.dumps(json_dict)
+        resp = api.replace_datafile(file_id, data_path, json_str, is_filepid=False)
+        if resp.json()["status"] == "ERROR":
+            LOGGER.error(f"An error at replacing the file: {resp.content}")
+
+    if dataset_publish:
+        resp = api.publish_dataset(dataverse_pid, release_type="major")
+        if resp.json()["status"] == "OK":
+            LOGGER.info("Dataset published.")
 
 
 def scale_variable(
