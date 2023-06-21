@@ -189,6 +189,7 @@ def main(cfg: DictConfig):
         use_bag_holdout=(spaceenv.spatial_tuning.frac > 0),
     )
     featimp = predictor.feature_importance(train_data, **training_cfg.feat_importance)
+
     results = predictor.fit_summary()
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"

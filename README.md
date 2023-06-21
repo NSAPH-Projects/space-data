@@ -1,24 +1,44 @@
-# SpaCE Data 🌎💪🏋️‍♀️
+![](resources/logo.png)
 
-## Install prerequisites
+[![](<https://img.shields.io/badge/Dataverse-10.7910/DVN/SYNPBS-orange>)](https://www.doi.org/10.7910/DVN/SYNPBS)
+[![](https://img.shields.io/static/v1?label=GitHub&message=SpaCE&color=blue&logo=github)](https://github.com/NSAPH-Projects/space)
+[![Licence](https://img.shields.io/pypi/l/spacebench.svg)](https://pypi.org/project/spacebench)
+
+
+## 🚀 Description
+
+This code repository is part of SpaCE (Spatial Confounding Environment), designed to address the challenge of spatial confounding in scientific studies involving spatial data. Spatial confounding occurs when unobserved spatial variables influence both the treatment and outcome, potentially leading to misleading associations. SpaCE offers benchmark datasets, each including training data, true counterfactuals, a spatial graph with coordinates, and scores characterizing the effect of a missing spatial confounder. The datasets encompass diverse domains such as climate, health, and social sciences. 
+
+In this repository, you will find the code for generating realistic semi-synthetic outcomes and counterfactuals using state-of-the-art machine learning ensembles, following best practices for causal inference benchmarks. To obtain the predictor $f$ and the spatial distribution of observed residuals $R$, the package employs AutoML techniques implemented with the AutoGluon package in Python. AutoGluon trains an ensemble of models and selects the best one based on cross-validation, including the performance-weighted ensemble.
+
+Please refer to [the main SpaCE repository]((https://github.com/NSAPH-Projects/space)) and [documentation](https://nsaph-projects.github.io/space/) for detailed instructions on using SpaCE and maximizing its capabilities for addressing spatial confounding in your scientific studies.
+
+## 🐍 Installation
+
+To get started with the SpaCE Data, create a conda environment with the following commands:
+
 ```
 conda env create -f requirements.yaml
 conda activate spacedata
 ```
 
-Creation of the conda environment is known to fail on Intel-based Macs. For these cases, you can use the Dockerfile in the repo.
+Please note that the creation of the conda environment may fail on Intel-based Macs. In such cases, we recommend using the Dockerfile available in the repository.
 
+## 🐢 Getting started
 
-## Run code
 
 Creating a dataset consists of two steps: training and uploading.
 
 ### Training
 
-Run the following command
+To create and train a new dataset, add a config file in `conf/spaceenv`. Look at `conf/spaceenv/elect_dempct_college.yaml` for inspiration. The elements marked with `???` under the `spaceenv` field in `conf/config.yaml` are mandatory.
+
+To train the model and generate counterfactuals, run the following command:
+
 ```
 python train.py spaceenv=<config_file_name>
 ```
+
 For example, you can use `python train.py spaceenv=elect_dempct_college` to train the `elect_dempct_college` space environment. In general, `<config_file_name>` can be any of the config files in `conf/spaceenv/`. The config files are `.yaml` files that contain the parameters for the training. The `spaceenv` parameter is mandatory and it should be the name of the config file without the `.yaml` extension.
 
 The outputs will be saved in `outputs/<base_name>` where the `base_name` is specified as a mandatory field in the config file. The outputs are:
@@ -27,12 +47,12 @@ The outputs will be saved in `outputs/<base_name>` where the `base_name` is spec
  - `leaderboard.csv`: results from `autogluon` fit.
  - `counterfactuals.png` image with generated potential outcome curves, it gives a good idea of the confounding
 
-**⚠️Note⚠️**: The recommended pattern is that the name of the config file and basenames are the same when pushing a file to the repository. In the future this may be automatic.
+**⚠️ Note ⚠️**: The recommended pattern is that the name of the config file and basenames are the same when pushing a file to the repository. In the future this may be automatic.
 
 
 ### Uploading
 
-You will need a Harvard Dataverse API token and export it as an environment variable. Then run
+You will need a Harvard Dataverse API token to upload the dataset in the SpaCE collection. Export it as an environment variable as follows:
 
 ```
 export DATAVERSE_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
@@ -41,12 +61,8 @@ python upload.py base_name=<base_name>
 
 Use the flag `debug=true` for debugging without uploading the dataset.
 
-## Add new datasets
 
-Add a config file in `conf/spaceenv`. Look at `conf/spaceenv/elect_dempct_college.yaml` for inspiration. The elements marked with `???` under the `spaceenv` field in `conf/config.yaml` are mandatory.
-
-
-## List of uploaded Space Envs
+## List of available Space Envs
 
 List of supported `SpaceEnvs`.
 
@@ -65,6 +81,8 @@ List of supported `SpaceEnvs`.
 | cdcsvi_nohsdp_poverty_disc           | binary     |
 
 
-## List of Raw Data Sources
+For more information and descriptions of the provided datasets, please refer to the README file within the `data/` folder. Each dataset is documented in a corresponding markdown file located inside the `data/` folder.
 
-These datasets are used to generate the synthetic data. They are described on the README of the `data/` folder.
+## 👽 Contact
+
+Contributions to this project are appreciated and encouraged from the external community. If you have a suggestion, bug reports, or would like to contribute new features, we invite you to engage with us by opening an issue or a pull request in the repository.

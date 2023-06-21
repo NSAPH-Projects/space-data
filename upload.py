@@ -62,7 +62,7 @@ def main(cfg: DictConfig):
             cfg.dataverse.pid,
             dataverse_token,
             debug=cfg.debug,
-            dataset_publish=True,
+            dataset_publish=cfg.publish,
         )
 
 

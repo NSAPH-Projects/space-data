@@ -29,7 +29,7 @@ data_dict = {
             "Temporal Resolution": "annual",
             "Original Data Sources": "https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html",
             "Data Processing Code": "`notebooks/102_cdc_atsdr_svi.ipynb`",
-            "Data Location": "https://drive.google.com/drive/folders/1De4e2DJhP1gzL5r-l9dXw4Jpa48imDH5?usp=sharing",
+            "Data Location": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS",
         },
         "var_list": {
             "FIPS": "Federal Information Processing Standard state code. This is a unique identifier for geographic regions in the United States, often used in data collection and analysis.",
@@ -55,15 +55,15 @@ data_dict = {
             "RPL_THEME3": "Percentile ranking for Racial and Ethnic Minority Status theme.",
             "RPL_THEME4": "Percentile ranking for Housing Type/ Transportation theme.",
             "RPL_THEMES": "Overall percentile ranking.",
-        }
+        },
     },
     "climate_exposure_ca": {
         "primary": {
-            "avg_rhum_jun": "avg_temp_jun",
+            "avg_rhum_jun": "avg_tmax_jun",
             "avg_smoke_pm_sep": "avg_wnd_sep",
-            "avg_smoke_pm_sep":"POP20_SQMI",
-            "avg_wnd_sep":"POP20_SQMI",
-            "avg_rhum_aug":"POP20_SQMI",
+            "avg_smoke_pm_sep": "POP20_SQMI",
+            "avg_wnd_sep": "POP20_SQMI",
+            "avg_rhum_aug": "POP20_SQMI",
         },
         "secondary": {
             "avg_rhum_jul": "avg_temp_jun",
@@ -83,7 +83,7 @@ data_dict = {
             "Temporal Resolution": "annual",
             "Original Data Sources": "https://prism.oregonstate.edu and https://www.ncei.noaa.gov/access/monitoring/wind/",
             "Data Processing Code": "`notebooks/104_climate_exposure.ipynb`",
-            "Data Location": "https://drive.google.com/drive/folders/1De4e2DJhP1gzL5r-l9dXw4Jpa48imDH5?usp=sharing",
+            "Data Location": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS",
         },
         "var_list": {
             "GEOID": "Unique geographic identifier of the area.",
@@ -109,14 +109,23 @@ data_dict = {
             "avg_smoke_pm_aug": "Average particulate matter from smoke in the area for the month of August.",
             "avg_smoke_pm_sep": "Average particulate matter from smoke in the area for the month of September.",
             "avg_smoke_pm_oct": "Average particulate matter from smoke in the area for the month of October.",
-        }
+            "EP_AGE17": "The estimated percentage of the population aged 17 or younger.",
+            "EP_AGE65": "The estimated percentage of the population aged 65 or older.",
+            "EP_NOINT": "The estimated percentage of households without an internet subscription.",
+            "EP_POV150": "The estimated percentage of the population living at 150% of the poverty level or below.",
+            "EP_UNEMP": "The estimated percentage of the labor force that is unemployed.",
+            "EP_MINRTY": "The estimated percentage of the population identified as a racial or ethnic minority.",
+            "EP_LIMENG": "The estimated percentage of the population with limited English proficiency.",
+            "EP_UNINSUR": "The estimated percentage of the population without health insurance.",
+            "RPL_THEMES": "Overall percentile ranking.",
+        },
     },
     "air_pollution_mortality_us": {
         "primary": {
-            "qd_mean_pm25":"cdc_mortality_pct",
-            "cs_poverty":"cdc_mortality_pct",
-            "cs_median_house_value":"cdc_mortality_pct",
-            "gmet_mean_summer_tmmn":"qd_mean_pm25",
+            "qd_mean_pm25": "cdc_mortality_pct",
+            "cs_poverty": "cdc_mortality_pct",
+            "cs_median_house_value": "cdc_mortality_pct",
+            "gmet_mean_summer_tmmn": "qd_mean_pm25",
             "gmet_mean_sph": "qd_mean_pm25",
         },
         "secondary": {
@@ -161,7 +170,7 @@ data_dict = {
             "Temporal Resolution": "annual",
             "Original Data Sources": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/L7YF2G and https://wonder.cdc.gov/controller/datarequest/D77",
             "Data Processing Code": "`notebooks/103_air_pollution.ipynb`",
-            "Data Location": "https://drive.google.com/drive/folders/1De4e2DJhP1gzL5r-l9dXw4Jpa48imDH5?usp=sharing",
+            "Data Location": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS",
         },
         "var_list": {
             "qd_mean_pm25": "Mean PM2.5 air pollution level. PM2.5 refers to atmospheric particulate matter with a diameter of less than 2.5 micrometers.",
@@ -212,13 +221,13 @@ data_dict = {
             "bin_NORTHEAST": "Binary variable indicating whether the location is in the Northeast region of the United States.",
             "bin_SOUTH": "Binary variable indicating whether the location is in the Southern region of the United States.",
             "bin_WEST": "Binary variable indicating whether the location is in the Western region of the United States.",
-        }
+        },
     },
     "election_us": {
         "primary": {
-            "cs_asian":"election_dem_pct",
-            "cs_ed_highschool":"election_dem_pct",
-            "cdc_suicides":"election_dem_pct",
+            "cs_asian": "election_dem_pct",
+            "cs_ed_highschool": "election_dem_pct",
+            "cdc_suicides": "election_dem_pct",
             "health_phy_inactive_pct": "life-expectancy",
             "bls_housing_costs": "bls_labor_force",
         },
@@ -233,7 +242,7 @@ data_dict = {
             "cs_ed_above_college": "life-expectancy",
             "poverty-rate": "life-expectancy",
             "bls_living_wage": "bls_housing_costs",
-            "noaa_snow":"life-expectancy",
+            "noaa_snow": "life-expectancy",
             "bls_tax_costs": "bls_living_wage",
             "health_poor_health_pct": "noaa_snow",
             "health_smokers_pct": "life-expectancy",
@@ -268,7 +277,7 @@ data_dict = {
             "Temporal Resolution": "annual",
             "Original Data Sources": "https://github.com/evangambit/JsonOfCounties",
             "Data Processing Code": "`notebooks/101_election_data.ipynb`",
-            "Data Location": "https://drive.google.com/drive/folders/1De4e2DJhP1gzL5r-l9dXw4Jpa48imDH5?usp=sharing",
+            "Data Location": "https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS",
         },
         "var_list": {
             "fips": "Federal Information Processing Standard code, a unique identifier for counties and county equivalents in the United States.",
@@ -319,7 +328,7 @@ data_dict = {
             "cs_asian": "Population count identifying as Asian.",
             "cs_hispanic": "Population count identifying as Hispanic.",
             "election_dem_pct": "Percentage of votes received by the Democratic party in the last election.",
-        }
+        },
     },
 }
 
@@ -343,7 +352,7 @@ overview_temp = """
 """
 
 
-data_dict_temp="""# Overview
+data_dict_temp = """# Overview
 
 {}
 
