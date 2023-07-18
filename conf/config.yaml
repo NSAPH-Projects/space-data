@@ -33,8 +33,11 @@ spaceenv:
     fit:
       presets: best_quality
       time_limit: 300
+    leave_out_fit:  # used for confounding scores
+      presets: best_quality
+      time_limit: 300
     feat_importance:
-      time_limit: 120
+      time_limit: 300
 
   spatial_tuning:  
     frac: 0.02  # usually this will results 50 train, 16 val
@@ -43,6 +46,8 @@ spaceenv:
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
+
+confounding_score_method: leave_out_fit  # choose (leave_out_fit, feature_importance)
 
 hydra:
   run:
