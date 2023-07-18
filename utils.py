@@ -289,3 +289,9 @@ def double_zip_folder(folder_path, output_path):
     os.remove(output_path + ".zip")
 
     return zipzip_path
+
+
+def sort_dict(d: dict) -> dict[str, float]:
+    return {
+        str(k): float(v) for k, v in sorted(d.items(), key=lambda x: x[1], reverse=True)
+    }
