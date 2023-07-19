@@ -6,11 +6,10 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 import yaml
 from autogluon.tabular import TabularDataset, TabularPredictor
 from hydra.utils import get_original_cwd
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything
 
 from utils import (
@@ -20,6 +19,8 @@ from utils import (
     scale_variable,
     transform_variable,
     sort_dict,
+    spatial_train_test_split,
+    unpack_covariates,
 )
 
 
@@ -63,18 +64,26 @@ def main(cfg: DictConfig):
     df = pd.read_csv(f"{owd}/{spaceenv.data_path}", **df_read_opts)
     df = df[df[spaceenv.treatment].notna()]
 
-    # maintain only covariates, treatment, and outcome
     if spaceenv.covariates is not None:
-        covariates = spaceenv.covariates
+        # use specified covar groups
+        covar_groups = OmegaConf.to_container(spaceenv.covariates)
+        covariates = unpack_covariates(covar_groups)
     else:
-        covariates = list(df.columns.difference([spaceenv.treatment, spaceenv.outcome]))
+        # assume all columns are covariates, each covariate is a group
+        covar_groups = df.columns.difference([spaceenv.treatment, spaceenv.outcome])
+        covar_groups = covar_groups.tolist()
+        covariates = covar_groups
+
     d = len(covariates)
+
+    # maintain only covariates, treatment, and outcome
     df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
 
     # get treatment and outcome and
     # apply transforms to treatment or outcome if needed
     # TODO: improve the syntax for transforms with covariates
     logging.info(f"Transforming data.")
+
     for tgt in ["treatment", "outcome", "covariates"]:
         scaling = getattr(spaceenv.scaling, tgt)
         transform = getattr(spaceenv.transforms, tgt)
@@ -136,48 +145,19 @@ def main(cfg: DictConfig):
     train_data = TabularDataset(dftrain)
 
     # == Spatial Train/Test Split ===
-    if spaceenv.spatial_tuning.frac > 0:
-        levels = spaceenv.spatial_tuning.levels
-        buffer_size = spaceenv.spatial_tuning.buffer
-        logging.info(f"Selecting tunning split removing {levels} nbrs from val. pts.")
+    tuning_nodes, buffer_nodes = spatial_train_test_split(
+        graph,
+        init_frac=spaceenv.spatial_tuning.init_frac,
+        levels=spaceenv.spatial_tuning.levels,
+        buffer=spaceenv.spatial_tuning.buffer,
+    )
 
-        # make dict of neighbors from graph
-        node_list = np.array(graph.nodes())
-        nbrs = {node: set(graph.neighbors(node)) for node in node_list}
-
-        # first find the centroid of the tuning subgraph
-        num_tuning_centroids = int(spaceenv.spatial_tuning.frac * df.shape[0])
-        tuning_nodes = np.random.choice(
-            df.shape[0], size=num_tuning_centroids, replace=False
-        )
-        tuning_nodes = set(node_list[tuning_nodes])
-
-        # not remove all neighbors of the tuning centroids from the training data
-        for _ in range(levels):
-            tmp = tuning_nodes.copy()
-            for node in tmp:
-                for nbr in nbrs[node]:
-                    tuning_nodes.add(nbr)
-        tuning_nodes = list(tuning_nodes)
-
-        # buffer
-        buffer_nodes = set(tuning_nodes.copy())
-        for _ in range(buffer_size):
-            tmp = buffer_nodes.copy()
-            for node in tmp:
-                for nbr in nbrs[node]:
-                    buffer_nodes.add(nbr)
-        buffer_nodes = list(set(buffer_nodes))
-
-        # split data into tuning and trainingå
-        tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)])
-        train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)])
-        tunefrac = 100 * len(tuning_nodes) / df.shape[0]
-        trainfrac = 100 * len(train_data) / df.shape[0]
-        logging.info(f"...{tunefrac:.2f}% of the rows used for tuning split.")
-        logging.info(f"...{trainfrac:.2f}% of the rows used for training.")
-    else:
-        tuning_data = None
+    tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)])
+    train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)])
+    tunefrac = 100 * len(tuning_nodes) / df.shape[0]
+    trainfrac = 100 * len(train_data) / df.shape[0]
+    logging.info(f"...{tunefrac:.2f}% of the rows used for tuning split.")
+    logging.info(f"...{trainfrac:.2f}% of the rows used for training.")
 
     # === Model fitting ===
     logging.info(f"Fitting model to outcome variable on train split.")
@@ -188,9 +168,6 @@ def main(cfg: DictConfig):
         tuning_data=tuning_data,
         use_bag_holdout=True,
     )
-    featimp = predictor.feature_importance(
-        train_data, **spaceenv.autogluon.feat_importance
-    )
     results = predictor.fit_summary()
     logging.info(f"Model fit summary:\n{results['leaderboard']}")
 
@@ -198,47 +175,16 @@ def main(cfg: DictConfig):
     logging.info(f"Fitting to full data.")
     predictor.refit_full("best")
 
-    # save full model weights
-    predictor.save()
-
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
 
-    # inject noise
+    # synsthetic outcome
     logging.info(f"Generating synthetic residuals for synthetic outcome.")
     mu_synth = predictor.predict(df)
     residuals = df[spaceenv.outcome] - mu_synth
     synth_residuals = generate_noise_like(residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
-
-    logging.info(f"Fitting model to treatment variable for confounding score.")
-    treat_trainer = TabularPredictor(label=spaceenv.treatment)
-    treat_train_data = TabularDataset(dftrain[covariates + [spaceenv.treatment]])
-    treat_predictor = treat_trainer.fit(treat_train_data, **training_cfg.fit)
-
-    # normalize feature importance by scale
-    yscale = np.nanstd(df[spaceenv.outcome])
-    tscale = np.nanstd(df[spaceenv.treatment])
-    treat_featimp = treat_predictor.feature_importance(
-        treat_train_data, **training_cfg.feat_importance
-    )
-    treat_featimp = (treat_featimp / tscale).importance.to_dict()
-    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
-
-    # compute the specific importance of the treatment on the outcome model
-    outcome_featimp = (featimp / yscale).importance.to_dict()
-    outcome_featimp = {c: float(outcome_featimp.get(c, 0.0)) for c in covariates}
-
-    treat_importance_outcome_model = featimp.importance.loc[spaceenv.treatment]
-    if spaceenv.boost_treatment:
-        extra_importances = featimp.importance.loc[extra_colnames].to_list()
-        treat_importances_all = [treat_importance_outcome_model] + extra_importances
-        treat_importance_outcome_model = np.mean(treat_importances_all)
-    outcome_featimp["treatment"] = float(treat_importance_outcome_model)
-
-    # compute the confounding score
-    confounding_score = {k: min(treat_featimp[k], outcome_featimp[k]) for k in covariates}
 
     # === Counterfactual generation ===
     logging.info(f"Generating counterfactual predictions and adding residuals")
@@ -264,41 +210,62 @@ def main(cfg: DictConfig):
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
+    # === Compute feature importance ===
+    logging.info(f"Computing feature importance.")
+    if spaceenv.boost_treatment:
+        featimp_data = TabularDataset(dftrain.drop(extra_colnames, axis=1))
+    else:
+        featimp_data = train_data
+
+    featimp = predictor.feature_importance(
+        featimp_data,
+        **training_cfg.feat_importance,
+    )
+
+    yscale = np.nanstd(df[spaceenv.outcome])
+    featimp = (featimp / yscale).importance.to_dict()
+    treat_imp = featimp[spaceenv.treatment]
+    featimp = {c: float(featimp.get(c, 0.0)) for c in covariates}
+    featimp["treatment"] = treat_imp
+
+    # === Fitting model to treatment variable for confounding score ===
+    logging.info(f"Fitting model to treatment variable for importance score.")
+    treat_trainer = TabularPredictor(label=spaceenv.treatment)
+    cols = covariates + [spaceenv.treatment]
+    treat_tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)][cols])
+    treat_train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)][cols])
+    treat_predictor = treat_trainer.fit(
+        treat_train_data,
+        **training_cfg.fit,
+        tuning_data=treat_tuning_data,
+        use_bag_holdout=True,
+    )
+    treat_predictor.refit_full("best")
+
+    # normalize feature importance by scale
+    tscale = np.nanstd(df[spaceenv.treatment])
+    treat_featimp = treat_predictor.feature_importance(
+        treat_train_data, **training_cfg.feat_importance
+    )
+    treat_featimp = (treat_featimp / tscale).importance.to_dict()
+    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
+
     # === Compute confounding score ===
     scoring_method = cfg.confounding_score_method
     logging.info(f"Computing confounding score using {scoring_method}.")
-    if scoring_method == "feature_importance":
-        logging.info(f"Fitting model to treatment variable.")
-        treat_trainer = TabularPredictor(label=spaceenv.treatment)
-        cols = dftrain.columns.difference([spaceenv.outcome])
-        treat_train_data = TabularDataset(dftrain[cols])
-        treat_predictor = treat_trainer.fit(
-            treat_train_data,
-            **spaceenv.autogluon.fit,
-            tuning_data=tuning_data[cols],
-            use_bag_holdout=True,
-        )
-        yscale = np.nanstd(df[spaceenv.outcome])
-        tscale = np.nanstd(df[spaceenv.treatment])
-        treat_featimp = (
-            treat_predictor.feature_importance(
-                treat_train_data, **spaceenv.autogluon.feat_importance
-            )
-            / tscale
-        )
-        outcome_featimp = featimp.loc[treat_featimp.index] / yscale
 
-        logging.info("Combining outcome and treatment importances with min")
-        confounding_score = np.minimum(
-            outcome_featimp.importance, treat_featimp.importance
-        ).sort_values(ascending=False)
+    if scoring_method == "feat_importance":
+        # compute the confounding score
+        confounding_score = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
+        logging.info(f"Combined importances with min:\n{confounding_score}")
 
     elif scoring_method == "leave_out_fit":
         confounding_score = {}
 
-        nc = len(covariates)
-        for i, c in enumerate(covariates):
-            cols = dftrain.columns.difference([c])
+        for i, g in enumerate(covar_groups):
+            key_ = list(g.keys())[0] if isinstance(g, dict) else g
+            value_ = list(g.values())[0] if isinstance(g, dict) else [g]
+            cols = dftrain.columns.difference(value_)
             leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
             leave_out_predictor = leave_out_predictor.fit(
                 train_data[cols],
@@ -306,6 +273,7 @@ def main(cfg: DictConfig):
                 tuning_data=tuning_data[cols],
                 use_bag_holdout=True,
             )
+            leave_out_predictor.refit_full("best")
 
             leave_out_mu_cf = []
             for a in avals:
@@ -317,9 +285,10 @@ def main(cfg: DictConfig):
 
             # compute loss normalized by the variance of the outcome
             rss = np.mean((leave_out_mu_cf.values - mu_cf.values) ** 2)
-            score = rss / Y_synth.var()
-            confounding_score[c] = max(1, score)
-            logging.info(f"[{i + 1} / {nc}] {c}: {score:.2f}")
+            # score = rss / mu_cf.values.var()
+            score = rss / yscale
+            confounding_score[key_] = score
+            logging.info(f"[{i + 1} / {len(covar_groups)}] {key_}: {score:.4f}")
 
     else:
         raise ValueError(f"Unrecognized confounding score method: {scoring_method}")
@@ -346,11 +315,13 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "confounding_score": sort_dict(confounding_score),
         "spatial_scores": sort_dict(moran_I_values),
-        "outcome_importance": sort_dict(outcome_featimp),
+        "outcome_importance": sort_dict(featimp),
         "treatment_importance": sort_dict(treat_featimp),
         "covariates": list(covariates),
-        "treatment_values": list(avals),
+        "treatment_values": avals.tolist(),
+        "covariate_groups": covar_groups,
     }
+
     with open("metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)
 

@@ -1,19 +1,19 @@
-import re
-import numpy as np
-import pandas as pd
-import os
 import json
-import shutil
-from zipfile import ZipFile
-from typing import Literal
-from omegaconf.listconfig import ListConfig
 import logging
-import networkx as nx
-from scipy.linalg import cholesky, solve_triangular
-from pyDataverse.models import Datafile
-from pyDataverse.api import NativeApi, DataAccessApi
+import os
+import re
+import shutil
+from typing import Literal
+from zipfile import ZipFile
 
-LOGGER = logging.getLogger(__name__)
+import networkx as nx
+import numpy as np
+from omegaconf import DictConfig
+import pandas as pd
+from omegaconf.listconfig import ListConfig
+from pyDataverse.api import DataAccessApi, NativeApi
+from pyDataverse.models import Datafile
+from scipy.linalg import cholesky, solve_triangular
 
 
 def download_dataverse_data(
@@ -57,13 +57,11 @@ def upload_dataverse_data(
 
     filename = os.path.basename(data_path)
 
-    
-    
     dataset = api.get_dataset(dataverse_pid)
     files_list = dataset.json()["data"]["latestVersion"]["files"]
     file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
     filename_ = filename.replace(".zip.zip", ".zip")
-     
+
     if filename_ not in file2id:
         dataverse_datafile = Datafile()
         dataverse_datafile.set(
@@ -73,33 +71,33 @@ def upload_dataverse_data(
                 "description": data_description,
             }
         )
-        LOGGER.info("File basename: " + filename)
-        
+        logging.info("File basename: " + filename)
+
         resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
         if resp.json()["status"] == "OK":
-            LOGGER.info("Dataset uploaded.")
+            logging.info("Dataset uploaded.")
         else:
-            LOGGER.error("Dataset not uploaded.")
-            LOGGER.error(resp.json())
+            logging.error("Dataset not uploaded.")
+            logging.error(resp.json())
     else:
-        LOGGER.info("File already exists. Replacing it.")
-        
-        file_id = file2id[filename_]  
+        logging.info("File already exists. Replacing it.")
+
+        file_id = file2id[filename_]
         json_dict = {
             "description": data_description,
             "forceReplace": True,
             "filename": filename,
-            #"label": filename,
+            # "label": filename,
         }
         json_str = json.dumps(json_dict)
         resp = api.replace_datafile(file_id, data_path, json_str, is_filepid=False)
         if resp.json()["status"] == "ERROR":
-            LOGGER.error(f"An error at replacing the file: {resp.content}")
+            logging.error(f"An error at replacing the file: {resp.content}")
 
     if dataset_publish:
         resp = api.publish_dataset(dataverse_pid, release_type="major")
         if resp.json()["status"] == "OK":
-            LOGGER.info("Dataset published.")
+            logging.info("Dataset published.")
 
 
 def scale_variable(
@@ -196,9 +194,9 @@ def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
 
     best_lam = min(lams, key=lambda l: losses[l])
 
-    LOGGER.info(f"Best lambda: {best_lam:.4f}")
+    logging.info(f"Best lambda: {best_lam:.4f}")
     losses_ = {np.round(k, 4): np.round(v, 4) for k, v in losses.items()}
-    LOGGER.info(f"Losses: {losses_}")
+    logging.info(f"Losses: {losses_}")
 
     return best_lam
 
@@ -238,7 +236,7 @@ def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
 
     # add variance to diagonal
     Q = corr * Q + (1 - corr + 1e-4) * np.eye(Q.shape[0])
-    LOGGER.info(f"Residual neighbor correlation: {corr:.4f}")
+    logging.info(f"Residual neighbor correlation: {corr:.4f}")
 
     # sample from GMRF
     Z = np.random.randn(Q.shape[0])
@@ -295,3 +293,53 @@ def sort_dict(d: dict) -> dict[str, float]:
     return {
         str(k): float(v) for k, v in sorted(d.items(), key=lambda x: x[1], reverse=True)
     }
+
+
+def spatial_train_test_split(
+    graph: nx.Graph, init_frac: float, levels: int, buffer: int
+):
+    logging.info(f"Selecting tunning split removing {levels} nbrs from val. pts.")
+
+    # make dict of neighbors from graph
+    node_list = np.array(graph.nodes())
+    n = len(node_list)
+    nbrs = {node: set(graph.neighbors(node)) for node in node_list}
+
+    # first find the centroid of the tuning subgraph
+    num_tuning_centroids = int(init_frac * n)
+    tuning_nodes = np.random.choice(n, size=num_tuning_centroids, replace=False)
+    tuning_nodes = set(node_list[tuning_nodes])
+
+    # not remove all neighbors of the tuning centroids from the training data
+    for _ in range(levels):
+        tmp = tuning_nodes.copy()
+        for node in tmp:
+            for nbr in nbrs[node]:
+                tuning_nodes.add(nbr)
+    tuning_nodes = list(tuning_nodes)
+
+    # buffer
+    buffer_nodes = set(tuning_nodes.copy())
+    for _ in range(buffer):
+        tmp = buffer_nodes.copy()
+        for node in tmp:
+            for nbr in nbrs[node]:
+                buffer_nodes.add(nbr)
+    buffer_nodes = list(set(buffer_nodes))
+
+    return tuning_nodes, buffer_nodes
+
+
+def unpack_covariates(groups: dict) -> list[str]:
+    covariates = []
+    for c in groups:
+        if isinstance(c, dict) and len(c) == 1:
+            covariates.extend(next(iter(c.values())))
+        elif isinstance(c, str):
+            covariates.append(c)
+        else:
+            msg = "covar group must me dict with a single element or str"
+            logging.error(msg)
+            raise ValueError(msg)
+
+    return covariates
