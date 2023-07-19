@@ -23,7 +23,7 @@ spaceenv:
     treatment:   # log, symlog, logit
     covariates:
   
-  boost_treatment: true  # replicate treatment cols during training
+  boost_treatment: false  # replicate treatment cols during training
   # boosting preserves the outcome of importance, it will be replicated
   # as many times as other covariates are there.
 
@@ -33,16 +33,21 @@ spaceenv:
     fit:
       presets: best_quality
       time_limit: 300
+    leave_out_fit:  # used for confounding scores
+      presets: best_quality
+      time_limit: 300
     feat_importance:
-      time_limit: 120
+      time_limit: 300
 
   spatial_tuning:  
-    frac: 0.02  # usually this will results 50 train, 16 val
-    levels: 1
-    buffer: 1
+    init_frac: 0.02  # usually 35-50% train, 16% val, 35% buffer
+    levels: 2
+    buffer: 0
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
+
+confounding_score_method: leave_out_fit  # choose (leave_out_fit, feature_importance)
 
 hydra:
   run:
