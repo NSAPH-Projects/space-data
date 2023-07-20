@@ -1,56 +1,55 @@
-data_path: data/counties_election.tab
-base_name: county_dmgrcs_election_disc
+collection: corr_election_us
 treatment: cs_white 
 outcome: election_dem_pct
-graph_path: data/counties.graphml
 transforms:
   treatment: qbinary(0.5)
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
-autogluon:
-  fit:
-    time_limit: 180
-    presets: best_quality
 covariates:
   - noaa_prcp
   - noaa_snow
-  - noaa_temp
   - noaa_altitude
-  - noaa_temp_jan
-  - noaa_temp_apr
-  - noaa_temp_jul
-  - noaa_temp_oct
+  - noadd_temp:
+    - noaa_temp
+    - noaa_temp_jan
+    - noaa_temp_apr
+    - noaa_temp_jul
+    - noaa_temp_oct
   - cs_female
   - population/2019
-  - cdc_suicides
-  - cdc_homicides
-  - cdc_vehicle_deaths
-  - bls_labor_force
-  - bls_employed
-  - bls_unemployed
-  - life-expectancy
-  - cdc_police_deaths_total
-  - cdc_police_deaths_unarmed
-  - police_deaths
-  - avg_income
-  - cs_ed_below_highschool
-  - cs_ed_highschool
-  - cs_ed_some_college
-  - cs_ed_above_college
-  - poverty-rate
-  - bls_living_wage
-  - bls_food_costs
-  - bls_medical_costs
-  - bls_housing_costs
-  - bls_tax_costs
-  - health_poor_health_pct
-  - health_smokers_pct
-  - health_obese_pct
-  - health_phy_inactive_pct
-  - health_children_poverty_pct
-  - health_80th_perc_income_pct
-  - health_20th_perc_income_pct
-  - cs_age-to-25
-  - cs_age-25-65
-  - cs_age-over-65
+  - cdc_violence:
+    - cdc_suicides
+    - cdc_homicides
+    - cdc_vehicle_deaths
+    - cdc_police_deaths_total
+    - cdc_police_deaths_unarmed
+    - police_deaths
+  - education:
+    - cs_ed_below_highschool
+    - cs_ed_highschool
+    - cs_ed_some_college
+    - cs_ed_above_college
+  - bls_employment:
+    - bls_labor_force
+    - bls_employed
+    - bls_unemployed
+  - income:
+    - avg_income
+    - poverty-rate
+  - bls_costs:
+    - bls_living_wage
+    - bls_food_costs
+    - bls_medical_costs
+    - bls_housing_costs
+    - bls_tax_costs
+  - health_risk_facotrs:
+    - health_poor_health_pct
+    - health_smokers_pct
+    - health_obese_pct
+    - health_phy_inactive_pct
+  - health_income:
+    - health_children_poverty_pct
+    - health_80th_perc_income_pct
+    - health_20th_perc_income_pct
+  - age:
+    - cs_age-to-25
+    - cs_age-25-65
+    - cs_age-over-65

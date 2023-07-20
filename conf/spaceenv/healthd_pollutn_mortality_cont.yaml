@@ -1,8 +1,6 @@
-data_path: data/air_pollution_mortality.tab
-base_name: healthd_pollutn_mortality_cont
+collection: air_pollution_mortality_us
 treatment: qd_mean_pm25
 outcome: cdc_mortality_pct
-graph_path: data/counties.graphml
 covariates:
   - poverty:
     - cs_poverty
@@ -13,7 +11,7 @@ covariates:
     - cs_white
     - cs_native
     - cs_asian
-  - cs_other
+    - cs_other
   - cs_population_density
   - cdc_mean_bmi
   - smoking:

@@ -11,10 +11,14 @@ from utils import upload_dataverse_data, double_zip_folder
 LOGGER = logging.getLogger(__name__)
 
 
-@hydra.main(config_path="conf", config_name="upload", version_base=None)
+@hydra.main(config_path="conf", config_name="upload_spaceenv", version_base=None)
 def main(cfg: DictConfig):
+    # verify inputs
+    assert not cfg.upload or cfg.token is not None, "Token must be provided for upload."
+
     # load metadata
-    train_dir = f"{hydra.utils.get_original_cwd()}/outputs/{cfg.base_name}"
+    train_dir = f"{hydra.utils.get_original_cwd()}/trained_spaceenvs/{cfg.base_name}"
+
     contents_dir = cfg.base_name
     assert os.path.exists(train_dir), f"Train directory {train_dir} not found."
 
@@ -43,27 +47,22 @@ def main(cfg: DictConfig):
         {json.dumps(config)}
         """
 
-    dataverse_token = cfg.dataverse.token
-    if cfg.dataverse.token is None:
-        dataverse_token = os.environ.get("DATAVERSE_TOKEN", None)
-
-    if dataverse_token is None:
-        if not cfg.debug:
-            raise ValueError(
-                "No token provided and DATAVERSE_TOKEN not found in enviroment."
-            )
-        else:
-            LOGGER.info("No token provided and debug=true. Skipping upload.")
-    else:
-        upload_dataverse_data(
+    if cfg.upload:
+        status = upload_dataverse_data(
             zipfile,
             data_description,
             cfg.dataverse.baseurl,
             cfg.dataverse.pid,
-            dataverse_token,
-            debug=cfg.debug,
-            dataset_publish=cfg.publish,
+            token=cfg.token,
+            publish=cfg.publish,
         )
+    else:
+        status = "Upload disabled"
+
+    # save a text file with the upload status, used in the pipeline
+    logging.info(f"Upload status: {status}")
+    with open("upload_status.txt", "w") as f:
+        f.write(status)
 
 
 if __name__ == "__main__":

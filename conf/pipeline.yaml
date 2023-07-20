@@ -1,0 +1,19 @@
+upload_dataverse: space_demo
+
+# note: the names of spaceenvs below point
+# to the name of the config files which is the same
+# as the base_name in the file.
+
+spaceenvs:
+  - climate_relhum_wfsmoke_cont
+  - climate_wfsmoke_minrty_disc
+  - healthd_dmgrcs_mortality_disc
+  - healthd_hhinco_mortality_cont
+  - healthd_pollutn_mortality_cont
+  - county_educatn_election_cont
+  - county_phyactiv_lifexpcy_cont
+  - county_dmgrcs_election_disc
+  - cdcsvi_limteng_hburdic_cont
+  - cdcsvi_nohsdp_poverty_cont
+  - cdcsvi_nohsdp_poverty_disc
+

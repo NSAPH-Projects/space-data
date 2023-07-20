@@ -2,21 +2,25 @@ name: spacedata
 channels:
   - defaults
   - conda-forge
+  - bioconda
+  - pytorch
 dependencies:
   - python=3.10
-  - lightgbm=3.3.5
+  - lightgbm=3.3
+  - snakemake=7.30.1
   - pip
   - pip:
-    - vowpalwabbit
-    - imodels
-    - catboost
-    - xgboost
-    - fastai
-    - ray[tune]
     - pyDataverse==0.3.1
-    - networkx
-    - hydra-core==1.3.2
-    - pytorch_lightning==1.2
-    - autogluon.tabular
     - ipykernel
     - black
+    - vowpalwabbit>=9,<9.9
+    - imodels>=1.3.10,<1.4.0
+    - catboost>=1.1,<1.3
+    - xgboost>=1.6,<1.8
+    - fastai>=2.3.1,<2.8
+    # - ray[tune]>=2.2.0,<2.4.0  # seems problematic
+    - networkx
+    - hydra-core==1.3.2
+    - pytorch
+    - pytorch_lightning==1.2
+    - autogluon.tabular==0.8.2

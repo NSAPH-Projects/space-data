@@ -1,12 +1,9 @@
 defaults:
   - _self_
   - spaceenv: ???
-  - space_dataverse.yaml
 
 spaceenv:
-  base_name: ???
-  data_path: ???
-  graph_path: ???
+  base_name: ${hydra:runtime.choices.spaceenv}
   covariates: null
   outcome: ???
   treament: ???
@@ -32,15 +29,18 @@ spaceenv:
   autogluon:
     fit:
       presets: best_quality
-      time_limit: 300
+      # time_limit: 300
+      time_limit: null
     leave_out_fit:  # used for confounding scores
       presets: best_quality
-      time_limit: 300
+      # time_limit: 300
+      time_limit: null
     feat_importance:
-      time_limit: 300
+      # time_limit: 300
+      time_limit: null
 
   spatial_tuning:  
-    init_frac: 0.02  # usually 35-50% train, 16% val, 35% buffer
+    init_frac: 0.05  # usually 35-50% train with 2 levels/buffer
     levels: 2
     buffer: 0
 
@@ -51,6 +51,6 @@ confounding_score_method: leave_out_fit  # choose (leave_out_fit, feature_import
 
 hydra:
   run:
-    dir: outputs/${spaceenv.base_name}
+    dir: trained_spaceenvs/${spaceenv.base_name}
   job:
     chdir: true

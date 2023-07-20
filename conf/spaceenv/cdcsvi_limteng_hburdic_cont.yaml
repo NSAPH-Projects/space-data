@@ -1,12 +1,11 @@
-data_path: data/cdcatsdrsvi_tx.tab
-base_name: cdcsvi_limteng_hburdic_cont
+collection: cdc_atsdr_svi_tx
 treatment: EP_LIMENG 
 outcome: EP_HBURD
-graph_path: data/tx_tracts.graphml
 covariates:
   - E_TOTPOP
-  - E_HU
-  - E_HH
+  - households:
+    - E_HU
+    - E_HH
   - EP_NOHSDP
   - EP_UNINSUR
   - EP_AGE65
@@ -16,3 +15,4 @@ covariates:
   - EP_MUNIT
   - EP_NOVEH
   - EP_NOINT
+  - RPL_THEME3
