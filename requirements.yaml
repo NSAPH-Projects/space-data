@@ -1,4 +1,4 @@
-name: spacedata2
+name: spacedata
 channels:
   - defaults
   - conda-forge
