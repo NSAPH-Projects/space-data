@@ -60,6 +60,7 @@ rule download_data_collection:
         python download_collection.py collection={wildcards.collection} 2> {log.err}
         """
 
+
 rule train_spaceenv:
     input:
         lambda wildcards: collection_files(spaceenv_parent[wildcards.spaceenv]),
@@ -84,6 +85,7 @@ rule upload_spaceenv:
         "trained_spaceenvs/{spaceenv}/leaderboard.csv",
     params:
         upload=pipeline_cfg.upload,
+        token=pipeline_cfg.token,
     log:
         err="uploads/{spaceenv}/upload_spaceenv.log",
     output:
@@ -92,5 +94,7 @@ rule upload_spaceenv:
     shell:
         """
         python upload_spaceenv.py spaceenv={wildcards.spaceenv} \
-            upload={params.upload} 2> {log.err}
+            upload={params.upload} \
+            token={params.token} \
+            2> {log.err}
         """

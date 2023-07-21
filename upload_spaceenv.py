@@ -9,7 +9,7 @@ from omegaconf import DictConfig
 from pyDataverse.api import NativeApi
 from pyDataverse.models import Datafile
 
-from utils import double_zip_folder, upload_dataverse_data
+from utils import double_zip_folder
 
 
 def upload_dataverse_data(
