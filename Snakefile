@@ -1,5 +1,10 @@
 from omegaconf import OmegaConf
-import download_collection
+
+
+singularity: "docker://mauriciogtec/spacedata:multi"
+
+
+conda: "requirements.yaml"
 
 
 # == Load configs ==
@@ -9,21 +14,21 @@ if len(config) == 0:
         " Use flag --configfile conf/pipeline.yaml"
     )
 
-# create OmegaConf from dictionary config
+# load configs
 pipeline_cfg = OmegaConf.create(config)  # passed by snakemake when using --configfile
 download_cfg = OmegaConf.load("conf/download_collection.yaml")
 train_cfg = OmegaConf.load("conf/train_spaceenv.yaml")
 upload_cfg = OmegaConf.load("conf/upload_spaceenv.yaml")
 
 
-# == Collect spaceenv parents ==
+# == Collect the collections used by each spaceenv ==
 spaceenv_parent = {}
 for e in pipeline_cfg.spaceenvs:
     cfg = OmegaConf.load(f"conf/spaceenv/{e}.yaml")
     spaceenv_parent[e] = cfg.collection
 
 
-# == Collect all spaceenvs that required uploading ==
+# == Identify all spaceenvs that required uploading ==
 target_files = []
 for e in pipeline_cfg.spaceenvs:
     status_file = f"uploads/{e}/upload_status.txt"
@@ -35,12 +40,7 @@ for e in pipeline_cfg.spaceenvs:
             os.remove(status_file)
     else:
         tgts = [status_file, f"uploads/{e}/{e}.zip.zip"]
-    target_files.extend([status_file, f"uploads/{e}/{e}.zip.zip"])
-
-
-def collection_files(c):
-    dir = f"data_collections/{c}"
-    return [f"{dir}/data.tab", f"{dir}/graph.graphml"]
+    target_files.append(status_file)
 
 
 # == Define rules ==
@@ -55,14 +55,28 @@ rule download_data_collection:
         "data_collections/{collection}/graph.graphml",
     log:
         err="data_collections/{collection}/download_collection.log",
+    params:
+        dataverse=pipeline_cfg.download_dataverse,
     shell:
         """
-        python download_collection.py collection={wildcards.collection} 2> {log.err}
+        python download_collection.py \
+            collection={wildcards.collection} \
+            dataverse={params.dataverse} \
+            2> {log.err}
         """
+
+
+def spaceenv_inputs(wildcards):
+    collection = spaceenv_parent[wildcards.spaceenv]
+    return [
+        f"data_collections/{collection}/data.tab",
+        f"data_collections/{collection}/graph.graphml",
+    ]
+
 
 rule train_spaceenv:
     input:
-        lambda wildcards: collection_files(spaceenv_parent[wildcards.spaceenv]),
+        spaceenv_inputs,
     output:
         "trained_spaceenvs/{spaceenv}/graph.graphml",
         "trained_spaceenvs/{spaceenv}/metadata.yaml",
@@ -84,13 +98,15 @@ rule upload_spaceenv:
         "trained_spaceenvs/{spaceenv}/leaderboard.csv",
     params:
         upload=pipeline_cfg.upload,
+        dataverse=pipeline_cfg.upload_dataverse,
     log:
         err="uploads/{spaceenv}/upload_spaceenv.log",
     output:
-        "uploads/{spaceenv}/{spaceenv}.zip.zip",
-        touch("uploads/{spaceenv}/upload_status.txt"),
+        "uploads/{spaceenv}/upload_status.txt",
     shell:
         """
         python upload_spaceenv.py spaceenv={wildcards.spaceenv} \
-            upload={params.upload} 2> {log.err}
+            upload={params.upload} \
+            dataverse={params.dataverse} \
+            2> {log.err}
         """
