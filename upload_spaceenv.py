@@ -105,6 +105,7 @@ def main(cfg: DictConfig):
     shutil.copy(f"{train_dir}/metadata.yaml", contents_dir)
     shutil.copy(f"{train_dir}/synthetic_data.csv", contents_dir)
     shutil.copy(f"{train_dir}/leaderboard.csv", contents_dir)
+    shutil.copy(f"{train_dir}/counterfactuals.png", contents_dir)
     shutil.copy(f"{train_dir}/.hydra/config.yaml", f"{contents_dir}/config.yaml")
     shutil.copy(f"{train_dir}/graph.graphml", contents_dir)
 

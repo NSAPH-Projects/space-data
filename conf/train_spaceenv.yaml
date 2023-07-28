@@ -29,7 +29,7 @@ spaceenv:
   autogluon:
     fit:
       presets: best_quality
-      time_limit: null  # set in seconds, null means no limit
+      time_limit: 3600  # in seconds, null means no limit
                         # this paremeter can be overriden in the
                         # config of each spaceenv for complex envs.
                         # similarly with the time limits below, presets
@@ -37,10 +37,10 @@ spaceenv:
       hyperparameters: null
     leave_out_fit:  # used for confounding scores
       presets: best_quality
-      time_limit: null
+      time_limit: 3600
       hyperparameters: null
     feat_importance:
-      time_limit: null
+      time_limit: 3600
 
   spatial_tuning:  
     init_frac: 0.05  # usually 35-50% train with 2 levels/buffer

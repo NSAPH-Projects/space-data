@@ -82,6 +82,7 @@ rule train_spaceenv:
         "trained_spaceenvs/{spaceenv}/metadata.yaml",
         "trained_spaceenvs/{spaceenv}/synthetic_data.csv",
         "trained_spaceenvs/{spaceenv}/leaderboard.csv",
+    threads: pipeline_cfg.training_threads
     log:
         err="trained_spaceenvs/{spaceenv}/error.log",
     shell:
