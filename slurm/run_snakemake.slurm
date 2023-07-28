@@ -1,25 +1,40 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -n 24
+#SBATCH -n 48
 #SBATCH -t 0-24:00:00
 #SBATCH -p shared
-#SBATCH --mem=64GB
-#SBATCH -o slurm/logs/slurm.%N.%j.out
-#SBATCH -e slurm/logs/slurm.%N.%j.err
+#SBATCH --mem=128GB
+#SBATCH -o slurm/slurm.%N.%j.out
+#SBATCH -e slurm/slurm.%N.%j.err
 #SBATCH --mail-type=ALL
 
-singularity_file=spacedata_multi.sif
-dataverse_api=$DEMO_DATAVERSE_TOKEN
-job="snakemake -j --configfile conf/pipeline.yaml"
-options="-C upload=true token=$dataverse_api upload_dataverse=demo"
+# Params
+dataverse="harvard"            # harvard or demo
+singularity_within_snakemake=1 # 1 or 0
+upload=1                       # 1 or 0
 
-# Pull from docker hub if singularity image (.sift) doesn't exist.
-# Normally, it would be sufficient to run snakemake with --use-singularity
-# but a bug in Snakemake prevents it. The bug has been identified and fixed
-# for the next release of Snakemake (v7.30.2).
-if [ ! -f $singularity_file ]; then
-    singularity pull --name docker://mauriciogtec/spacedata:multi
+# Set token to DEMO_DATAVERSE_TOKEN or HARVARD_DATAVERSE_TOKEN
+if [ $dataverse == "harvard" ]; then
+    token=$HARVARD_DATAVERSE_TOKEN
+elif [ $dataverse == "demo" ]; then
+    token=$DEMO_DATAVERSE_TOKEN
+else
+    echo "Dataverse not recognized. Please use harvard or demo."
+    exit 1
 fi
 
-singularity exec $singularity_file $job $options
+if [ $singularity_within_snakemake == 1 ]; then
+    job="snakemake -j --use-singularity"
+else
+    singularity_file="spacedata_multi.sif"
+    if [ ! -f $singularity_file ]; then
+        singularity pull --name docker://mauriciogtec/spacedata:multi
+    fi
+    job="singularity exec $singularity_file snakemake -j"
+fi
+
+options="--configfile conf/pipeline.yaml -C \
+    upload=$upload token=$token upload_dataverse=$dataverse"
+
+$job $options

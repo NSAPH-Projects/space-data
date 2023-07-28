@@ -30,10 +30,10 @@ Please note that the creation of the conda environment may fail on Intel-based M
 To reproduce all the spaceenvs, simply run the following command:
 
 ```bash
-snakemake -j --configfile conf/pipeline.yaml -C dataverse=demo
+snakemake -j --configfile conf/pipeline.yaml -C dataverse=demo upload=true
 ```
 
-Here `dataverse=demo` indicates the dataverse where the data will be uploaded. See the [upload](#uploading) section. To run everything without uploading the data, append `upload=false` to the command above.
+Here `dataverse=demo` indicates the dataverse where the data will be uploaded. See the [upload](#uploading) section. To run everything without uploading the data, remove the `upload=true` flag.
 
 Snakemake will make sure not too run things twice when they have been already trained and uploaded.
 
