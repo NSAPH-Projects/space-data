@@ -240,48 +240,65 @@ def main(cfg: DictConfig):
     treat_featimp = (treat_featimp / tscale).importance.to_dict()
     treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
 
-    # === Compute confounding score ===
-    scoring_method = cfg.confounding_score_method
-    logging.info(f"Computing confounding score using {scoring_method}.")
+    # legacy confounding score by inimum
+    cs_minimum = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
+    logging.info(f"Legacy conf. score by minimum:\n{cs_minimum}")
 
-    if scoring_method == "feat_importance":
-        # compute the confounding score
-        confounding_score = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
-        logging.info(f"Combined importances with min:\n{confounding_score}")
+    # === Compute confounding scores ===
+    # The strategy for confounding scores is to compute various types
+    # using the baseline model.
 
-    elif scoring_method == "leave_out_fit":
-        confounding_score = {}
+    # For continous treatment compute the ERF and PEHE scores
+    # For categorical treatmetn additionally compute the ATE score
+    # For both also use the minimum of the treatment and outcome model
+    # As in the first version of the paper.
 
-        for i, g in enumerate(covar_groups):
-            key_ = list(g.keys())[0] if isinstance(g, dict) else g
-            value_ = list(g.values())[0] if isinstance(g, dict) else [g]
-            cols = dftrain.columns.difference(value_)
-            leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
-            leave_out_predictor = leave_out_predictor.fit(
-                train_data[cols],
-                **spaceenv.autogluon.fit,
-                tuning_data=tuning_data[cols],
-                use_bag_holdout=True,
-            )
-            leave_out_predictor.refit_full()
+    # For comparability across environments, we divide the scores by the
+    # variance of the synthetic outcome.
 
-            leave_out_mu_cf = []
-            for a in avals:
-                cfdata = df[cols].copy()
-                cfdata[spaceenv.treatment] = a
-                predicted = leave_out_predictor.predict(TabularDataset(cfdata))
-                leave_out_mu_cf.append(predicted)
-            leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+    # Obtain counterfactuals for the others
+    cs_erf = {}
+    cs_pehe = {}
+    cs_ate = {}  # will be empty if not binary
+    scale = np.var(Y_synth)
 
-            # compute loss normalized by the variance of the outcome
-            rss = np.mean((leave_out_mu_cf.values - mu_cf.values) ** 2)
-            # score = rss / mu_cf.values.var()
-            score = rss / yscale
-            confounding_score[key_] = score
-            logging.info(f"[{i + 1} / {len(covar_groups)}] {key_}: {score:.4f}")
+    for i, g in enumerate(covar_groups):
+        key_ = list(g.keys())[0] if isinstance(g, dict) else g
+        value_ = list(g.values())[0] if isinstance(g, dict) else [g]
+        cols = dftrain.columns.difference(value_)
+        leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
+        leave_out_predictor = leave_out_predictor.fit(
+            train_data[cols],
+            **spaceenv.autogluon.fit,
+            tuning_data=tuning_data[cols],
+            use_bag_holdout=True,
+        )
+        leave_out_predictor.refit_full()
 
-    else:
-        raise ValueError(f"Unrecognized confounding score method: {scoring_method}")
+        leave_out_mu_cf = []
+        for a in avals:
+            cfdata = df[cols].copy()
+            cfdata[spaceenv.treatment] = a
+            predicted = leave_out_predictor.predict(TabularDataset(cfdata))
+            leave_out_mu_cf.append(predicted)
+        leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+
+        logging.info(f"[{i + 1} / {len(covar_groups)}]: {key_}")
+
+        # compute loss normalized by the variance of the outcome
+        pehe = ((leave_out_mu_cf.values - mu_cf.values) ** 2).mean()
+        cs_pehe[key_] = float(pehe / scale)
+        logging.info(f"PEHE: {cs_pehe[key_]:.3f}")
+
+        erf_err = ((leave_out_mu_cf.values - mu_cf.values).mean(0) ** 2).mean()
+        cs_erf[key_] = float(erf_err / scale)
+        logging.info(f"ERF: {cs_erf[key_]:.3f}")
+
+        if n_treatment_values == 2:
+            diff = (leave_out_mu_cf.values - mu_cf.values).mean(0)
+            cs_ate[key_] = float((diff[1] - diff[0]) ** 2 / scale)
+            logging.info(f"ATE: {cs_ate[key_]:.3f}")
+
 
     # === Compute the spatial smoothness of each covariate
     logging.info(f"Computing spatial smoothness of each covariate.")
@@ -305,7 +322,10 @@ def main(cfg: DictConfig):
         "treatment": spaceenv.treatment,
         "predicted_outcome": spaceenv.outcome,
         "synthetic_outcome": "Y_synth",
-        "confounding_score": utils.sort_dict(confounding_score),
+        "confounding_score": utils.sort_dict(cs_minimum),
+        "confounding_score_erf": utils.sort_dict(cs_erf),
+        "confounding_score_pehe": utils.sort_dict(cs_pehe),
+        "confounding_score_ate": utils.sort_dict(cs_ate),
         "spatial_scores": utils.sort_dict(moran_I_values),
         "outcome_importance": utils.sort_dict(featimp),
         "treatment_importance": utils.sort_dict(treat_featimp),

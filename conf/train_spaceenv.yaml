@@ -50,8 +50,6 @@ spaceenv:
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
 
-confounding_score_method: leave_out_fit  # choose (leave_out_fit, feature_importance)
-
 hydra:
   run:
     dir: trained_spaceenvs/${spaceenv.base_name}
