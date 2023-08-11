@@ -1,10 +1,10 @@
 #!/bin/bash
 
 #SBATCH -N 1
-#SBATCH -n 48
+#SBATCH -n 24
 #SBATCH -t 0-24:00:00
 #SBATCH -p shared
-#SBATCH --mem=128GB
+#SBATCH --mem=88GB
 #SBATCH -o slurm/slurm.%N.%j.out
 #SBATCH -e slurm/slurm.%N.%j.err
 #SBATCH --mail-type=ALL
