@@ -20,9 +20,11 @@ spaceenv:
     treatment:   # log, symlog, logit
     covariates:
   
-  boost_treatment: false  # replicate treatment cols during training
-  # boosting preserves the outcome of importance, it will be replicated
-  # as many times as other covariates are there.
+  # augmentations for the treatment
+  bsplines: true  # for continuous treatments only
+  bsplines_degree: 3
+  bsplines_num_knots: 8  # number of knots to use
+  binary_treatment_iteractions: true  # add interaction columns for binary treatments
 
   seed: 42
 

@@ -158,7 +158,7 @@ def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     # scale noise to have same variance as residuals
     noise = noise / noise.std() * np.nanstd(x)
 
-    return noise
+    return noise, corr
 
 
 def moran_I(x: pd.Series, A: np.ndarray) -> float:

@@ -8,6 +8,7 @@ import pandas as pd
 import yaml
 from autogluon.tabular import TabularDataset, TabularPredictor
 from omegaconf import DictConfig, OmegaConf
+from scipy.interpolate import BSpline
 from pytorch_lightning import seed_everything
 
 import utils
@@ -98,24 +99,39 @@ def main(cfg: DictConfig):
     # make treatment boolean if only two values
     if df[spaceenv.treatment].nunique() == 2:
         df[spaceenv.treatment] = df[spaceenv.treatment].astype(bool)
+        is_binary_treatment = True
+    else:
+        is_binary_treatment = False
 
-    # repeat the treatment column several times to allow for the probability
-    # of the ML autogluon models using the treatment as a feature
-    # Mathematically, it doesn't change the model space, but avoids the
-    # treatment effect getting lost.
-    if spaceenv.boost_treatment:
-        logging.info(f"Boosting treatment variable by repeating columns.")
-        extra_cols = df[spaceenv.treatment].copy()
-        extra_cols = pd.concat([extra_cols] * (d - 1), axis=1)
-        extra_colnames = [f"boosted_treatment_{i:02d}" for i in range(d - 1)]
-        extra_cols.columns = extra_colnames
+    # === Add extra columns / techniques for better causal effect estimation
+    # based on increasing attention to the treatment ===
+    if not is_binary_treatment and spaceenv.bsplines:
+        logging.info(f"Boosting treatment with b-splines (continuous treatment).")
+        deg = spaceenv.bsplines_degree
+        num_knots = spaceenv.bsplines_num_knots
+        t = df[spaceenv.treatment].values
+        knots = np.linspace(t.min(), t.max(), num_knots - 2 * (deg - 1)).tolist()
+        knots = [t.min()] * (deg - 1) + knots + [t.max()] * (deg - 1)
+        spline_basis = [
+            BSpline.basis_element(knots[i : (i + deg + 2)])
+            for i in range(num_knots - deg - 1)
+        ]
+        extra_colnames = [f"splines_{i}" for i in range(len(spline_basis))]
+        extra_cols = np.stack([s(t) for s in spline_basis], axis=1)
+        extra_cols = pd.DataFrame(extra_cols, columns=extra_colnames, index=df.index)
+        df = pd.concat([df, extra_cols], axis=1)
+    elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+        logging.info(f"Boosting treatment adding interactions with all covariates.")
+        t_ind = df[spaceenv.treatment].values[:, None].astype(float)
+        interacted = df[covariates].values * t_ind
+        extra_colnames = [f"{c}_interact" for c in covariates]
+        extra_cols = pd.DataFrame(interacted, columns=extra_colnames, index=df.index)
         df = pd.concat([df, extra_cols], axis=1)
 
     # test with a subset of the data
     if cfg.debug_subsample is not None:
         logging.info(f"Subsampling since debug_subsample={cfg.debug_subsample}.")
-        n = cfg.debug_subsample
-        ix = np.random.choice(n, 100, replace=False)
+        ix = np.random.choice(cfg.debug_subsample, 100, replace=False)
         df = df.iloc[ix]
 
     # === Harmonize data and graph ===
@@ -172,7 +188,7 @@ def main(cfg: DictConfig):
     logging.info(f"Generating synthetic residuals for synthetic outcome.")
     mu_synth = predictor.predict(df)
     residuals = df[spaceenv.outcome] - mu_synth
-    synth_residuals = utils.generate_noise_like(residuals, graph)
+    synth_residuals, residual_corr = utils.generate_noise_like(residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
 
@@ -188,8 +204,15 @@ def main(cfg: DictConfig):
     for a in avals:
         cfdata = df.copy()
         cfdata[spaceenv.treatment] = a
-        if spaceenv.boost_treatment:
-            cfdata[extra_colnames] = a
+        # evaluate bspline basis on treatment a fixed
+        if not is_binary_treatment and spaceenv.bsplines:
+            t = cfdata[spaceenv.treatment].values
+            extra_cols = np.stack([s(np.full_like(t, a)) for s in spline_basis], axis=1)
+            cfdata[extra_colnames] = extra_cols
+        elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+            extra_cols = df[covariates].values * a
+            cfdata[extra_colnames] = extra_cols
+
         cfdata = TabularDataset(cfdata)
         predicted = predictor.predict(cfdata)
         mu_cf.append(predicted)
@@ -202,20 +225,32 @@ def main(cfg: DictConfig):
 
     # === Compute feature importance ===
     logging.info(f"Computing feature importance.")
-    if spaceenv.boost_treatment:
-        featimp_data = TabularDataset(dftrain.drop(extra_colnames, axis=1))
-    else:
-        featimp_data = train_data
-
     featimp = predictor.feature_importance(
-        featimp_data,
+        train_data,
         **training_cfg.feat_importance,
     )
+    # convert the .importance column to dict
+    featimp = dict(featimp.importance)
+
+    if not is_binary_treatment and spaceenv.bsplines:
+        # this is the case when we want to merge the scores of all splines
+        # of the treat  ment into a single score. We can use max aggregation
+        tname = spaceenv.treatment
+        for c in extra_colnames:
+            featimp[tname] = max(featimp.get(tname, 0.0), featimp.get(c, 0.0))
+            if c in featimp:
+                featimp.pop(c)
+    elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+        # this is the case when we want to merge interacted covariates
+        # with the treatment. We can use max aggregation strategy.
+        for c in covariates:
+            featimp[c] = max(featimp.get(c, 0.0), featimp.get(c + "_interact", 0.0))
+            if c + "_interact" in featimp:
+                featimp.pop(c + "_interact")
 
     yscale = np.nanstd(df[spaceenv.outcome])
-    featimp = (featimp / yscale).importance.to_dict()
     treat_imp = featimp[spaceenv.treatment]
-    featimp = {c: float(featimp.get(c, 0.0)) for c in covariates}
+    featimp = {c: float(featimp.get(c, 0.0)) / yscale for c in covariates}
     featimp["treatment"] = treat_imp
 
     # === Fitting model to treatment variable for confounding score ===
@@ -237,8 +272,18 @@ def main(cfg: DictConfig):
     treat_featimp = treat_predictor.feature_importance(
         treat_train_data, **training_cfg.feat_importance
     )
-    treat_featimp = (treat_featimp / tscale).importance.to_dict()
-    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
+    treat_featimp = dict(treat_featimp.importance)
+
+    # do the reduction for the case of interactions
+    if is_binary_treatment and spaceenv.binary_treatment_iteractions:
+        for c in covariates:
+            treat_featimp[c] = max(
+                treat_featimp.get(c, 0.0), treat_featimp.get(c + "_interact", 0.0)
+            )
+            if c + "_interact" in treat_featimp:
+                treat_featimp.pop(c + "_interact")
+
+    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) / tscale for c in covariates}
 
     # legacy confounding score by inimum
     cs_minimum = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
@@ -248,7 +293,7 @@ def main(cfg: DictConfig):
     # The strategy for confounding scores is to compute various types
     # using the baseline model.
 
-    # For continous treatment compute the ERF and PEHE scores
+    # For continous treatment compute the ERF and ITE scores
     # For categorical treatmetn additionally compute the ATE score
     # For both also use the minimum of the treatment and outcome model
     # As in the first version of the paper.
@@ -258,9 +303,9 @@ def main(cfg: DictConfig):
 
     # Obtain counterfactuals for the others
     cs_erf = {}
-    cs_pehe = {}
+    cs_ite = {}
     cs_ate = {}  # will be empty if not binary
-    scale = np.var(Y_synth)
+    scale = np.std(Y_synth)
 
     for i, g in enumerate(covar_groups):
         key_ = list(g.keys())[0] if isinstance(g, dict) else g
@@ -286,19 +331,17 @@ def main(cfg: DictConfig):
         logging.info(f"[{i + 1} / {len(covar_groups)}]: {key_}")
 
         # compute loss normalized by the variance of the outcome
-        pehe = ((leave_out_mu_cf.values - mu_cf.values) ** 2).mean()
-        cs_pehe[key_] = float(pehe / scale)
-        logging.info(f"PEHE: {cs_pehe[key_]:.3f}")
+        cf_err = (leave_out_mu_cf.values - mu_cf.values) / scale
+        cs_ite[key_] = float(np.sqrt((cf_err**2).mean(0)).mean())
+        logging.info(f"ITE: {cs_ite[key_]:.3f}")
 
-        erf_err = ((leave_out_mu_cf.values - mu_cf.values).mean(0) ** 2).mean()
-        cs_erf[key_] = float(erf_err / scale)
+        erf_err = (leave_out_mu_cf.values - mu_cf.values).mean(0) / scale
+        cs_erf[key_] = float(np.abs(erf_err).mean())
         logging.info(f"ERF: {cs_erf[key_]:.3f}")
 
         if n_treatment_values == 2:
-            diff = (leave_out_mu_cf.values - mu_cf.values).mean(0)
-            cs_ate[key_] = float((diff[1] - diff[0]) ** 2 / scale)
+            cs_ate[key_] = np.abs(erf_err[1] - erf_err[0])
             logging.info(f"ATE: {cs_ate[key_]:.3f}")
-
 
     # === Compute the spatial smoothness of each covariate
     logging.info(f"Computing spatial smoothness of each covariate.")
@@ -324,7 +367,7 @@ def main(cfg: DictConfig):
         "synthetic_outcome": "Y_synth",
         "confounding_score": utils.sort_dict(cs_minimum),
         "confounding_score_erf": utils.sort_dict(cs_erf),
-        "confounding_score_pehe": utils.sort_dict(cs_pehe),
+        "confounding_score_ite": utils.sort_dict(cs_ite),
         "confounding_score_ate": utils.sort_dict(cs_ate),
         "spatial_scores": utils.sort_dict(moran_I_values),
         "outcome_importance": utils.sort_dict(featimp),
@@ -332,8 +375,10 @@ def main(cfg: DictConfig):
         "covariates": list(covariates),
         "treatment_values": avals.tolist(),
         "covariate_groups": covar_groups,
+        "original_residual_spatial_score": float(residual_corr),
     }
 
+    # save metadata and resolved config
     with open(f"{output_dir}/metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)
 
