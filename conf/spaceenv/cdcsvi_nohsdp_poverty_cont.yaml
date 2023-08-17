@@ -1,8 +1,6 @@
-data_path: data/cdcatsdrsvi_tx.tab
-base_name: cdcsvi_nohsdp_poverty_cont
+collection: cdc_atsdr_svi_tx
 treatment: EP_NOHSDP
 outcome: EP_POV150
-graph_path: data/tx_tracts.graphml
 covariates:
   - EP_UNEMP
   - EP_AGE65
@@ -14,3 +12,4 @@ covariates:
   - EP_MUNIT
   - EP_NOVEH
   - EP_NOINT
+  - RPL_THEME3

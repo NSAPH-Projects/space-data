@@ -1,5 +1,0 @@
-base_name: election_us
-data_path: data/counties_election.tab
-graph_path: data/counties.graphml
-outcome: election_dem_pct
-treatment: cs_ed_highschool

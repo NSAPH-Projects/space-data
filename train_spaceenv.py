@@ -1,5 +1,4 @@
 import logging
-import os
 
 import hydra
 import matplotlib.pyplot as plt
@@ -8,23 +7,13 @@ import numpy as np
 import pandas as pd
 import yaml
 from autogluon.tabular import TabularDataset, TabularPredictor
-from hydra.utils import get_original_cwd
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything
 
-from utils import (
-    download_dataverse_data,
-    generate_noise_like,
-    moran_I,
-    scale_variable,
-    transform_variable,
-    sort_dict,
-    spatial_train_test_split,
-    unpack_covariates,
-)
+import utils
 
 
-@hydra.main(config_path="conf", config_name="config", version_base=None)
+@hydra.main(config_path="conf", config_name="train_spaceenv", version_base=None)
 def main(cfg: DictConfig):
     """
     Trains a model using AutoGluon and save the results.
@@ -32,56 +21,56 @@ def main(cfg: DictConfig):
     # == Load config ===
     spaceenv = cfg.spaceenv
     training_cfg = spaceenv.autogluon
+    output_dir = "."  # hydra automatically sets this for this script since
+    # the config option hydra.job.chdir is true
+    # we need to set the original workind directory to the
+    # this is convenient since autogluon saves the intermediate
+    # models on the working directory without obvious way to change it
 
     # === Data preparation ===
     # set seed
     seed_everything(spaceenv.seed)
 
-    # root directory
-    owd = get_original_cwd()
+    # == Read collection graph/data ==
+    original_cwd = hydra.utils.get_original_cwd()
+    collection_path = f"{original_cwd}/data_collections/{spaceenv.collection}/data.tab"
+    graph_path = f"{original_cwd}/data_collections/{spaceenv.collection}/graph.graphml"
 
-    # download dataset and graph from dataverse if necessary
-    files = {"Graph": spaceenv.graph_path, "Data": spaceenv.data_path}
-    for obj, path in files.items():
-        if not os.path.exists(f"{owd}/{path}"):
-            filename = os.path.basename(path)
-            logging.info(f"{obj} not found. Downloading from dataverse.")
-            download_dataverse_data(
-                filename=filename,
-                dataverse_baseurl=cfg.dataverse.baseurl,
-                dataverse_pid=cfg.dataverse.pid,
-                output_dir=f"{owd}/data",
-            )
+    # data
+    logging.info(f"Reading data collection from {collection_path}:")
+    df_read_opts = {
+        "sep": "\t",
+        "index_col": spaceenv.index_col,
+        "dtype": {spaceenv.index_col: str},
+    }
+    df = pd.read_csv(collection_path, **df_read_opts)
 
-    # load data
-    logging.info(f"Loading data from {spaceenv.data_path}")
-    data_ext = spaceenv.data_path.split(".")[-1]
-    delim = "," if data_ext == "csv" else "\t"
-    df_read_opts = {"sep": delim}
-    if spaceenv.index_col is not None:
-        df_read_opts["index_col"] = spaceenv.index_col
-        df_read_opts["dtype"] = {spaceenv.index_col: str}
-    df = pd.read_csv(f"{owd}/{spaceenv.data_path}", **df_read_opts)
+    tmp = df.shape[0]
     df = df[df[spaceenv.treatment].notna()]
+    logging.info(f"Removed {tmp - df.shape[0]}/{tmp} rows with missing treatment.")
 
+    # graph
+    logging.info(f"Reading graph from {graph_path}.")
+    graph = nx.read_graphml(graph_path)
+
+    # === Read covariate groups ===
     if spaceenv.covariates is not None:
         # use specified covar groups
         covar_groups = OmegaConf.to_container(spaceenv.covariates)
-        covariates = unpack_covariates(covar_groups)
+        covariates = utils.unpack_covariates(covar_groups)
     else:
         # assume all columns are covariates, each covariate is a group
         covar_groups = df.columns.difference([spaceenv.treatment, spaceenv.outcome])
         covar_groups = covar_groups.tolist()
         covariates = covar_groups
-
     d = len(covariates)
 
     # maintain only covariates, treatment, and outcome
+    tmp = df.shape[1]
     df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
+    logging.info(f"Removed {tmp - df.shape[1]}/{tmp} columns due to covariate choice.")
 
-    # get treatment and outcome and
-    # apply transforms to treatment or outcome if needed
-    # TODO: improve the syntax for transforms with covariates
+    # === Apply data transformations ===
     logging.info(f"Transforming data.")
 
     for tgt in ["treatment", "outcome", "covariates"]:
@@ -97,14 +86,14 @@ def main(cfg: DictConfig):
                 else:
                     scaling_ = scaling
                 logging.info(f"Scaling {varname} with {scaling_}")
-                df[varname] = scale_variable(df[varname].values, scaling_)
+                df[varname] = utils.scale_variable(df[varname].values, scaling_)
             if transform is not None:
                 if isinstance(transform, (dict, DictConfig)):
                     transform_ = transform[varname]
                 else:
                     transform_ = transform
                 logging.info(f"Transforming {varname} with {transform_}")
-                df[varname] = transform_variable(df[varname].values, transform_)
+                df[varname] = utils.transform_variable(df[varname].values, transform_)
 
     # make treatment boolean if only two values
     if df[spaceenv.treatment].nunique() == 2:
@@ -115,23 +104,21 @@ def main(cfg: DictConfig):
     # Mathematically, it doesn't change the model space, but avoids the
     # treatment effect getting lost.
     if spaceenv.boost_treatment:
+        logging.info(f"Boosting treatment variable by repeating columns.")
         extra_cols = df[spaceenv.treatment].copy()
         extra_cols = pd.concat([extra_cols] * (d - 1), axis=1)
         extra_colnames = [f"boosted_treatment_{i:02d}" for i in range(d - 1)]
         extra_cols.columns = extra_colnames
         df = pd.concat([df, extra_cols], axis=1)
 
-    # read graphml
-    logging.info(f"Reading graph from {spaceenv.graph_path}")
-    graph = nx.read_graphml(f"{owd}/{spaceenv.graph_path}")
-
     # test with a subset of the data
     if cfg.debug_subsample is not None:
+        logging.info(f"Subsampling since debug_subsample={cfg.debug_subsample}.")
         n = cfg.debug_subsample
         ix = np.random.choice(n, 100, replace=False)
         df = df.iloc[ix]
 
-    # keep intersection of nodes in graph and data
+    # === Harmonize data and graph ===
     intersection = set(df.index).intersection(set(graph.nodes))
     n = len(intersection)
     perc = 100 * n / len(df)
@@ -140,12 +127,14 @@ def main(cfg: DictConfig):
     graph = nx.subgraph(graph, intersection)
     df = df.loc[intersection]
 
-    # remove nans from training data
+    # remove nans in outcome
+    outcome_nans = np.isnan(df[spaceenv.outcome])
+    logging.info(f"Removing {outcome_nans.sum()} for training since missing outcome.")
     dftrain = df[~np.isnan(df[spaceenv.outcome])]
     train_data = TabularDataset(dftrain)
 
     # == Spatial Train/Test Split ===
-    tuning_nodes, buffer_nodes = spatial_train_test_split(
+    tuning_nodes, buffer_nodes = utils.spatial_train_test_split(
         graph,
         init_frac=spaceenv.spatial_tuning.init_frac,
         levels=spaceenv.spatial_tuning.levels,
@@ -162,6 +151,7 @@ def main(cfg: DictConfig):
     # === Model fitting ===
     logging.info(f"Fitting model to outcome variable on train split.")
     trainer = TabularPredictor(label=spaceenv.outcome)
+
     predictor = trainer.fit(
         train_data,
         **training_cfg.fit,
@@ -173,7 +163,7 @@ def main(cfg: DictConfig):
 
     # === Retrain on full data for the final model
     logging.info(f"Fitting to full data.")
-    predictor.refit_full("best")
+    predictor.refit_full()
 
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
@@ -182,7 +172,7 @@ def main(cfg: DictConfig):
     logging.info(f"Generating synthetic residuals for synthetic outcome.")
     mu_synth = predictor.predict(df)
     residuals = df[spaceenv.outcome] - mu_synth
-    synth_residuals = generate_noise_like(residuals, graph)
+    synth_residuals = utils.generate_noise_like(residuals, graph)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
 
@@ -240,7 +230,7 @@ def main(cfg: DictConfig):
         tuning_data=treat_tuning_data,
         use_bag_holdout=True,
     )
-    treat_predictor.refit_full("best")
+    treat_predictor.refit_full()
 
     # normalize feature importance by scale
     tscale = np.nanstd(df[spaceenv.treatment])
@@ -250,83 +240,105 @@ def main(cfg: DictConfig):
     treat_featimp = (treat_featimp / tscale).importance.to_dict()
     treat_featimp = {c: float(treat_featimp.get(c, 0.0)) for c in covariates}
 
-    # === Compute confounding score ===
-    scoring_method = cfg.confounding_score_method
-    logging.info(f"Computing confounding score using {scoring_method}.")
+    # legacy confounding score by inimum
+    cs_minimum = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
+    logging.info(f"Legacy conf. score by minimum:\n{cs_minimum}")
 
-    if scoring_method == "feat_importance":
-        # compute the confounding score
-        confounding_score = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
-        logging.info(f"Combined importances with min:\n{confounding_score}")
+    # === Compute confounding scores ===
+    # The strategy for confounding scores is to compute various types
+    # using the baseline model.
 
-    elif scoring_method == "leave_out_fit":
-        confounding_score = {}
+    # For continous treatment compute the ERF and PEHE scores
+    # For categorical treatmetn additionally compute the ATE score
+    # For both also use the minimum of the treatment and outcome model
+    # As in the first version of the paper.
 
-        for i, g in enumerate(covar_groups):
-            key_ = list(g.keys())[0] if isinstance(g, dict) else g
-            value_ = list(g.values())[0] if isinstance(g, dict) else [g]
-            cols = dftrain.columns.difference(value_)
-            leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
-            leave_out_predictor = leave_out_predictor.fit(
-                train_data[cols],
-                **spaceenv.autogluon.fit,
-                tuning_data=tuning_data[cols],
-                use_bag_holdout=True,
-            )
-            leave_out_predictor.refit_full("best")
+    # For comparability across environments, we divide the scores by the
+    # variance of the synthetic outcome.
 
-            leave_out_mu_cf = []
-            for a in avals:
-                cfdata = df[cols].copy()
-                cfdata[spaceenv.treatment] = a
-                predicted = leave_out_predictor.predict(TabularDataset(cfdata))
-                leave_out_mu_cf.append(predicted)
-            leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+    # Obtain counterfactuals for the others
+    cs_erf = {}
+    cs_pehe = {}
+    cs_ate = {}  # will be empty if not binary
+    scale = np.var(Y_synth)
 
-            # compute loss normalized by the variance of the outcome
-            rss = np.mean((leave_out_mu_cf.values - mu_cf.values) ** 2)
-            # score = rss / mu_cf.values.var()
-            score = rss / yscale
-            confounding_score[key_] = score
-            logging.info(f"[{i + 1} / {len(covar_groups)}] {key_}: {score:.4f}")
+    for i, g in enumerate(covar_groups):
+        key_ = list(g.keys())[0] if isinstance(g, dict) else g
+        value_ = list(g.values())[0] if isinstance(g, dict) else [g]
+        cols = dftrain.columns.difference(value_)
+        leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
+        leave_out_predictor = leave_out_predictor.fit(
+            train_data[cols],
+            **spaceenv.autogluon.fit,
+            tuning_data=tuning_data[cols],
+            use_bag_holdout=True,
+        )
+        leave_out_predictor.refit_full()
 
-    else:
-        raise ValueError(f"Unrecognized confounding score method: {scoring_method}")
+        leave_out_mu_cf = []
+        for a in avals:
+            cfdata = df[cols].copy()
+            cfdata[spaceenv.treatment] = a
+            predicted = leave_out_predictor.predict(TabularDataset(cfdata))
+            leave_out_mu_cf.append(predicted)
+        leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+
+        logging.info(f"[{i + 1} / {len(covar_groups)}]: {key_}")
+
+        # compute loss normalized by the variance of the outcome
+        pehe = ((leave_out_mu_cf.values - mu_cf.values) ** 2).mean()
+        cs_pehe[key_] = float(pehe / scale)
+        logging.info(f"PEHE: {cs_pehe[key_]:.3f}")
+
+        erf_err = ((leave_out_mu_cf.values - mu_cf.values).mean(0) ** 2).mean()
+        cs_erf[key_] = float(erf_err / scale)
+        logging.info(f"ERF: {cs_erf[key_]:.3f}")
+
+        if n_treatment_values == 2:
+            diff = (leave_out_mu_cf.values - mu_cf.values).mean(0)
+            cs_ate[key_] = float((diff[1] - diff[0]) ** 2 / scale)
+            logging.info(f"ATE: {cs_ate[key_]:.3f}")
+
 
     # === Compute the spatial smoothness of each covariate
     logging.info(f"Computing spatial smoothness of each covariate.")
     moran_I_values = {}
     adjmat = nx.adjacency_matrix(graph, nodelist=df.index).toarray()
     for c in covariates:
-        moran_I_values[c] = moran_I(df[c], adjmat)
+        moran_I_values[c] = utils.moran_I(df[c], adjmat)
 
     # === Save results ===
     logging.info(f"Saving synthetic data, graph, and metadata")
     X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
-    dfout.to_csv("synthetic_data.csv")
-    nx.write_graphml(graph, "graph.graphml")
 
-    name_prefix = "spaceb" if n_bins == 2 else "spacec"
+    tgt_data_path = f"{output_dir}/synthetic_data.csv"
+    tgt_graph_path = f"{output_dir}/graph.graphml"
+    dfout.to_csv(tgt_data_path)
+    nx.write_graphml(graph, tgt_graph_path)
+
     metadata = {
-        "name": f"{name_prefix}_{spaceenv.base_name}",
+        "base_name": f"{spaceenv.base_name}",
         "treatment": spaceenv.treatment,
         "predicted_outcome": spaceenv.outcome,
         "synthetic_outcome": "Y_synth",
-        "confounding_score": sort_dict(confounding_score),
-        "spatial_scores": sort_dict(moran_I_values),
-        "outcome_importance": sort_dict(featimp),
-        "treatment_importance": sort_dict(treat_featimp),
+        "confounding_score": utils.sort_dict(cs_minimum),
+        "confounding_score_erf": utils.sort_dict(cs_erf),
+        "confounding_score_pehe": utils.sort_dict(cs_pehe),
+        "confounding_score_ate": utils.sort_dict(cs_ate),
+        "spatial_scores": utils.sort_dict(moran_I_values),
+        "outcome_importance": utils.sort_dict(featimp),
+        "treatment_importance": utils.sort_dict(treat_featimp),
         "covariates": list(covariates),
         "treatment_values": avals.tolist(),
         "covariate_groups": covar_groups,
     }
 
-    with open("metadata.yaml", "w") as f:
+    with open(f"{output_dir}/metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)
 
     # model leaderboard from autogluon results
-    results["leaderboard"].to_csv("leaderboard.csv", index=False)
+    results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
 
     logging.info("Plotting counterfactuals and residuals.")
     ix = np.random.choice(len(df), cfg.num_plot_samples)
@@ -349,7 +361,7 @@ def main(cfg: DictConfig):
     ax.set_xlabel(spaceenv.treatment)
     ax.set_ylabel(spaceenv.outcome)
     ax.set_title("Counterfactuals")
-    fig.savefig("counterfactuals.png", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{output_dir}/counterfactuals.png", dpi=300, bbox_inches="tight")
 
     logging.info("Plotting histogram of true and synthetic residuals.")
     fig, ax = plt.subplots(figsize=(4, 3))
@@ -359,7 +371,7 @@ def main(cfg: DictConfig):
     ax.set_ylabel("Density")
     ax.set_title("Residuals")
     ax.legend()
-    fig.savefig("residuals.png", dpi=300, bbox_inches="tight")
+    fig.savefig(f"{output_dir}/residuals.png", dpi=300, bbox_inches="tight")
 
 
 if __name__ == "__main__":

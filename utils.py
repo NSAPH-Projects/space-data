@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import re
@@ -8,96 +7,9 @@ from zipfile import ZipFile
 
 import networkx as nx
 import numpy as np
-from omegaconf import DictConfig
 import pandas as pd
 from omegaconf.listconfig import ListConfig
-from pyDataverse.api import DataAccessApi, NativeApi
-from pyDataverse.models import Datafile
 from scipy.linalg import cholesky, solve_triangular
-
-
-def download_dataverse_data(
-    filename: str,
-    dataverse_baseurl: str,
-    dataverse_pid: str,
-    output_dir: str = ".",
-):
-    api = NativeApi(dataverse_baseurl)
-    data_api = DataAccessApi(dataverse_baseurl)
-    dataset = api.get_dataset(dataverse_pid)
-    files_list = dataset.json()["data"]["latestVersion"]["files"]
-    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
-
-    if filename not in file2id:
-        raise ValueError(f"File {filename} not found in dataverse.")
-    else:
-        response = data_api.get_datafile(file2id[filename])
-        with open(f"{output_dir}/{filename}", "wb") as f:
-            f.write(response.content)
-
-
-def upload_dataverse_data(
-    data_path: str,
-    data_description: str,
-    dataverse_baseurl: str,
-    dataverse_pid: str,
-    dataverse_token: str,
-    dataset_publish: bool = False,
-    debug: bool = False,
-):
-    """
-    Upload data to the collection
-    Args:
-        file_path (str): Filename
-        description (str): Data file description.
-        token (str): Dataverse API Token.
-    """
-
-    api = NativeApi(dataverse_baseurl, dataverse_token)
-
-    filename = os.path.basename(data_path)
-
-    dataset = api.get_dataset(dataverse_pid)
-    files_list = dataset.json()["data"]["latestVersion"]["files"]
-    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
-    filename_ = filename.replace(".zip.zip", ".zip")
-
-    if filename_ not in file2id:
-        dataverse_datafile = Datafile()
-        dataverse_datafile.set(
-            {
-                "pid": dataverse_pid,
-                "filename": filename,
-                "description": data_description,
-            }
-        )
-        logging.info("File basename: " + filename)
-
-        resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
-        if resp.json()["status"] == "OK":
-            logging.info("Dataset uploaded.")
-        else:
-            logging.error("Dataset not uploaded.")
-            logging.error(resp.json())
-    else:
-        logging.info("File already exists. Replacing it.")
-
-        file_id = file2id[filename_]
-        json_dict = {
-            "description": data_description,
-            "forceReplace": True,
-            "filename": filename,
-            # "label": filename,
-        }
-        json_str = json.dumps(json_dict)
-        resp = api.replace_datafile(file_id, data_path, json_str, is_filepid=False)
-        if resp.json()["status"] == "ERROR":
-            logging.error(f"An error at replacing the file: {resp.content}")
-
-    if dataset_publish:
-        resp = api.publish_dataset(dataverse_pid, release_type="major")
-        if resp.json()["status"] == "OK":
-            logging.info("Dataset published.")
 
 
 def scale_variable(
