@@ -23,7 +23,7 @@ spaceenv:
   # augmentations for the treatment
   bsplines: true  # for continuous treatments only
   bsplines_degree: 3
-  bsplines_num_knots: 8  # number of knots to use
+  bsplines_df: 5
   binary_treatment_iteractions: true  # add interaction columns for binary treatments
 
   seed: 42

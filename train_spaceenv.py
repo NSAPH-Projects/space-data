@@ -106,18 +106,24 @@ def main(cfg: DictConfig):
     # === Add extra columns / techniques for better causal effect estimation
     # based on increasing attention to the treatment ===
     if not is_binary_treatment and spaceenv.bsplines:
-        logging.info(f"Boosting treatment with b-splines (continuous treatment).")
-        deg = spaceenv.bsplines_degree
-        num_knots = spaceenv.bsplines_num_knots
+        logging.info(f"Boosting treatment with b-splines of pctile (cont. treatment).")
+        b_deg = spaceenv.bsplines_degree
+        b_df = spaceenv.bsplines_df
+
         t = df[spaceenv.treatment].values
-        knots = np.linspace(t.min(), t.max(), num_knots - 2 * (deg - 1)).tolist()
-        knots = [t.min()] * (deg - 1) + knots + [t.max()] * (deg - 1)
+        t_vals = np.sort(np.unique(t))
+
+        def get_t_pct(t):
+            return np.searchsorted(t_vals, t) / len(t_vals)
+
+        knots = np.linspace(0, 1, b_df + 1)[1:-1].tolist()
+        knots = [t.min()] * b_deg + knots + [t.max()] * b_deg
         spline_basis = [
-            BSpline.basis_element(knots[i : (i + deg + 2)])
-            for i in range(num_knots - deg - 1)
+            BSpline.basis_element(knots[i : (i + b_deg + 2)])
+            for i in range(len(knots) - b_deg - 1)
         ]
         extra_colnames = [f"splines_{i}" for i in range(len(spline_basis))]
-        extra_cols = np.stack([s(t) for s in spline_basis], axis=1)
+        extra_cols = np.stack([s(get_t_pct(t)) for s in spline_basis], axis=1)
         extra_cols = pd.DataFrame(extra_cols, columns=extra_colnames, index=df.index)
         df = pd.concat([df, extra_cols], axis=1)
     elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
@@ -206,8 +212,8 @@ def main(cfg: DictConfig):
         cfdata[spaceenv.treatment] = a
         # evaluate bspline basis on treatment a fixed
         if not is_binary_treatment and spaceenv.bsplines:
-            t = cfdata[spaceenv.treatment].values
-            extra_cols = np.stack([s(np.full_like(t, a)) for s in spline_basis], axis=1)
+            t_a_pct = np.full_like(t, get_t_pct(a))
+            extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
             cfdata[extra_colnames] = extra_cols
         elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
             extra_cols = df[covariates].values * a
@@ -324,6 +330,15 @@ def main(cfg: DictConfig):
         for a in avals:
             cfdata = df[cols].copy()
             cfdata[spaceenv.treatment] = a
+
+            if not is_binary_treatment and spaceenv.bsplines:
+                t_a_pct = np.full_like(t, get_t_pct(a))
+                extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
+                cfdata[extra_colnames] = extra_cols
+            elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+                extra_cols = df[covariates].values * a
+                cfdata[extra_colnames] = extra_cols
+
             predicted = leave_out_predictor.predict(TabularDataset(cfdata))
             leave_out_mu_cf.append(predicted)
         leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
