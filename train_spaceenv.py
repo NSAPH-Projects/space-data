@@ -116,8 +116,8 @@ def main(cfg: DictConfig):
         def get_t_pct(t):
             return np.searchsorted(t_vals, t) / len(t_vals)
 
-        knots = np.linspace(0, 1, b_df + 1)[1:-1].tolist()
-        knots = [t.min()] * b_deg + knots + [t.max()] * b_deg
+        knots = np.linspace(0, 1, b_df)[1:-1].tolist()
+        knots = [0] * b_deg + knots + [1] * b_deg
         spline_basis = [
             BSpline.basis_element(knots[i : (i + b_deg + 2)])
             for i in range(len(knots) - b_deg - 1)
