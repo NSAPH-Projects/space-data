@@ -53,6 +53,8 @@ def main(cfg: DictConfig):
     # graph
     logging.info(f"Reading graph from {graph_path}.")
     graph = nx.read_graphml(graph_path)
+    node2ix = {n: i for i, n in enumerate(df.index)}
+    edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
 
     # === Read covariate groups ===
     if spaceenv.covariates is not None:
@@ -190,13 +192,16 @@ def main(cfg: DictConfig):
     mu = predictor.predict(df)
     mu.name = mu.name + "_pred"
 
-    # synsthetic outcome
+    # sythetic outcome
     logging.info(f"Generating synthetic residuals for synthetic outcome.")
     mu_synth = predictor.predict(df)
-    residuals = df[spaceenv.outcome] - mu_synth
-    synth_residuals, residual_corr = utils.generate_noise_like(residuals, graph)
+    residuals = (df[spaceenv.outcome] - mu_synth).values
+    synth_residuals = utils.generate_noise_like(residuals, edge_list)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
+
+    residual_smoothness = utils.moran_I(residuals, edge_list)
+    synth_residual_smoothness = utils.moran_I(synth_residuals, edge_list)
 
     # === Counterfactual generation ===
     logging.info(f"Generating counterfactual predictions and adding residuals")
@@ -320,7 +325,7 @@ def main(cfg: DictConfig):
         leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
         leave_out_predictor = leave_out_predictor.fit(
             train_data[cols],
-            **spaceenv.autogluon.fit,
+            **spaceenv.autogluon.leave_out_fit,
             tuning_data=tuning_data[cols],
             use_bag_holdout=True,
         )
@@ -361,9 +366,8 @@ def main(cfg: DictConfig):
     # === Compute the spatial smoothness of each covariate
     logging.info(f"Computing spatial smoothness of each covariate.")
     moran_I_values = {}
-    adjmat = nx.adjacency_matrix(graph, nodelist=df.index).toarray()
     for c in covariates:
-        moran_I_values[c] = utils.moran_I(df[c], adjmat)
+        moran_I_values[c] = utils.moran_I(df[c].values, edge_list)
 
     # === Save results ===
     logging.info(f"Saving synthetic data, graph, and metadata")
@@ -390,7 +394,8 @@ def main(cfg: DictConfig):
         "covariates": list(covariates),
         "treatment_values": avals.tolist(),
         "covariate_groups": covar_groups,
-        "original_residual_spatial_score": float(residual_corr),
+        "original_residual_spatial_score": float(residual_smoothness),
+        "synthetic_residual_spatial_score": float(synth_residual_smoothness),
     }
 
     # save metadata and resolved config
