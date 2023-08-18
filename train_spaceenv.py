@@ -219,7 +219,7 @@ def main(cfg: DictConfig):
         cfdata[spaceenv.treatment] = a
         # evaluate bspline basis on treatment a fixed
         if not is_binary_treatment and spaceenv.bsplines:
-            t_a_pct = np.full_like(t, get_t_pct(a))
+            t_a_pct = np.full((n, ), get_t_pct(a))
             extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
             cfdata[extra_colnames] = extra_cols
         elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
