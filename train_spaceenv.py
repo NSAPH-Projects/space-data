@@ -204,6 +204,8 @@ def main(cfg: DictConfig):
 
     residual_smoothness = utils.moran_I(residuals, edge_list)
     synth_residual_smoothness = utils.moran_I(synth_residuals, edge_list)
+    residual_nbrs_corr = utils.get_nbrs_corr(residuals, edge_list)
+    synth_residual_nbrs_corr = utils.get_nbrs_corr(synth_residuals, edge_list)
 
     # === Counterfactual generation ===
     logging.info(f"Generating counterfactual predictions and adding residuals")
@@ -219,7 +221,7 @@ def main(cfg: DictConfig):
         cfdata[spaceenv.treatment] = a
         # evaluate bspline basis on treatment a fixed
         if not is_binary_treatment and spaceenv.bsplines:
-            t_a_pct = np.full((n, ), get_t_pct(a))
+            t_a_pct = np.full((n,), get_t_pct(a))
             extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
             cfdata[extra_colnames] = extra_cols
         elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
@@ -235,7 +237,6 @@ def main(cfg: DictConfig):
     ]
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
-
 
     # model leaderboard from autogluon results
     results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
@@ -272,7 +273,6 @@ def main(cfg: DictConfig):
     ax.set_title("Residuals")
     ax.legend()
     fig.savefig(f"{output_dir}/residuals.png", dpi=300, bbox_inches="tight")
-
 
     # === Compute feature importance ===
     logging.info(f"Computing feature importance.")
@@ -377,7 +377,7 @@ def main(cfg: DictConfig):
             cfdata[spaceenv.treatment] = a
 
             if not is_binary_treatment and spaceenv.bsplines:
-                t_a_pct = np.full((n, ), get_t_pct(a))
+                t_a_pct = np.full((n,), get_t_pct(a))
                 extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
                 cfdata[extra_colnames] = extra_cols
             elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
@@ -436,6 +436,8 @@ def main(cfg: DictConfig):
         "covariate_groups": covar_groups,
         "original_residual_spatial_score": float(residual_smoothness),
         "synthetic_residual_spatial_score": float(synth_residual_smoothness),
+        "original_nbrs_corr": float(residual_nbrs_corr),
+        "synthetic_nbrs_corr": float(synth_residual_nbrs_corr),
     }
 
     # save metadata and resolved config
