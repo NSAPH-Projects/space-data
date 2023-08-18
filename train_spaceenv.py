@@ -149,6 +149,10 @@ def main(cfg: DictConfig):
     graph = nx.subgraph(graph, intersection)
     df = df.loc[intersection]
 
+    # obtain final edge list
+    node2ix = {n: i for i, n in enumerate(df.index)}
+    edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
+
     # remove nans in outcome
     outcome_nans = np.isnan(df[spaceenv.outcome])
     logging.info(f"Removing {outcome_nans.sum()} for training since missing outcome.")
