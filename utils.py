@@ -148,8 +148,18 @@ def generate_noise_like(
         nbrs[i].append(j)
         nbrs[j].append(i)
 
-    nbrs_means = np.array([np.nanmean(x[nbrs[i]]) for i in range(n)])
-    nbrs_means[np.isnan(nbrs_means)] = np.nanmean(nbrs_means)
+    xbar = np.nanmean(x)
+    nbrs_means = np.zeros(len(x))
+    for i in range(len(x)):
+        if len(nbrs[i]) == 0:
+            nbrs_means[i] = xbar
+        else:
+            valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
+            if len(valid) > 0:
+                nbrs_means[i] = np.mean(valid)
+            else:
+                nbrs_means[i] = xbar
+
     x_ = x.copy()
     x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
     rho = np.corrcoef(x_, nbrs_means)[0, 1]
@@ -205,12 +215,20 @@ def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
         nbrs[j].append(i)
 
     # input the neighbors
-    nbrs_means = np.array([np.nanmean(x[nbrs[i]]) for i in range(len(x))])
-    nbrs_means[np.isnan(nbrs_means)] = np.nanmean(nbrs_means)
-    x[np.isnan(x)] = nbrs_means[np.isnan(x)]
+    xbar = np.nanmean(x)
+    nbrs_means = np.zeros(len(x))
+    for i in range(len(x)):
+        if len(nbrs[i]) == 0:
+            nbrs_means[i] = xbar
+        else:
+            valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
+            if len(valid) > 0:
+                nbrs_means[i] = np.mean(valid)
+            else:
+                nbrs_means[i] = xbar
 
     # Subtract mean from attribute values
-    x_diff = x - x.mean()
+    x_diff = x - xbar
 
     # Compute numerator: sum of product of weight and pair differences from mean
     src_diff = x_diff[edge_list[:, 0]]
