@@ -151,14 +151,14 @@ def generate_noise_like(
     xbar = np.nanmean(x)
     nbrs_means = np.zeros(len(x))
     for i in range(len(x)):
-        if len(nbrs[i]) == 0:
-            nbrs_means[i] = xbar
+        if nbrs[i]:
+            nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
         else:
             valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
-            if len(valid) > 0:
+            if valid:
                 nbrs_means[i] = np.mean(valid)
             else:
-                nbrs_means[i] = xbar
+                nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
 
     x_ = x.copy()
     x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
@@ -180,7 +180,7 @@ def generate_noise_like(
         degree[j] += 1
 
     # Add diagonal entries
-    data.extend(degree)
+    data.extend(np.maximum(degree, 0.1))
     rows.extend(range(n))
     cols.extend(range(n))
 
@@ -193,8 +193,10 @@ def generate_noise_like(
     best_attempt = None
     for _ in range(attempts):
         noise = factorization.solve(np.random.normal(size=n))
-        nbr_means = [np.mean(noise[nbrs[i]]) for i in range(n)]
-        corr = np.corrcoef(noise, nbr_means)[0, 1]
+        noise_nbrs_means = [
+            np.mean(noise[nbrs[i]]) if nbrs[i] else noise[i] for i in range(n)
+        ]
+        corr = np.corrcoef(noise, noise_nbrs_means)[0, 1]
         if np.abs(rho - corr) < best_result:
             best_result = np.abs(rho - corr)
             best_corr = corr
@@ -218,14 +220,15 @@ def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
     xbar = np.nanmean(x)
     nbrs_means = np.zeros(len(x))
     for i in range(len(x)):
-        if len(nbrs[i]) == 0:
-            nbrs_means[i] = xbar
+        if nbrs[i]:
+            nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
         else:
             valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
-            if len(valid) > 0:
+            if valid:
                 nbrs_means[i] = np.mean(valid)
             else:
-                nbrs_means[i] = xbar
+                nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
+
 
     # Subtract mean from attribute values
     x_diff = x - xbar
