@@ -229,9 +229,11 @@ def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
             else:
                 nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
 
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
 
     # Subtract mean from attribute values
-    x_diff = x - xbar
+    x_diff = x_ - xbar
 
     # Compute numerator: sum of product of weight and pair differences from mean
     src_diff = x_diff[edge_list[:, 0]]
