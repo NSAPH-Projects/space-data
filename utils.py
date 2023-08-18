@@ -215,7 +215,7 @@ def get_nbrs_corr(
     x_ = x.copy()
     x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
     rho = np.corrcoef(x_, nbrs_means)[0, 1]
-    return rho
+    return float(rho)
 
 
 def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
