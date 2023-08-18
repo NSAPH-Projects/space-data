@@ -139,30 +139,8 @@ def generate_noise_like(
 ) -> np.ndarray:
     """Injects noise into residuals using a Gaussian Markov Random Field."""
     n = len(x)
-
-    # nbrs2ix = {n: i for i, n in enumerate(x.index)}
-    # nbrs = [[nbrs2ix[i] for i in nx.neighbors(graph, n)] for n in x.index]
-    # x_ = x.values
-    nbrs = [[] for _ in range(edge_list.shape[0])]
-    for i, j in edge_list:
-        nbrs[i].append(j)
-        nbrs[j].append(i)
-
-    xbar = np.nanmean(x)
-    nbrs_means = np.zeros(len(x))
-    for i in range(len(x)):
-        if nbrs[i]:
-            nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
-        else:
-            valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
-            if valid:
-                nbrs_means[i] = np.mean(valid)
-            else:
-                nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
-
-    x_ = x.copy()
-    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
-    rho = np.corrcoef(x_, nbrs_means)[0, 1]
+    nbrs_means = get_nbrs_means(x, edge_list)
+    rho = get_nbrs_corr(x, edge_list, nbrs_means=nbrs_means)
 
     # 1. Build precision matrix
     # Arrays to hold the data, row indices, and column indices for Q
@@ -193,9 +171,7 @@ def generate_noise_like(
     best_attempt = None
     for _ in range(attempts):
         noise = factorization.solve(np.random.normal(size=n))
-        noise_nbrs_means = [
-            np.mean(noise[nbrs[i]]) if nbrs[i] else noise[i] for i in range(n)
-        ]
+        noise_nbrs_means = get_nbrs_means(noise, edge_list)
         corr = np.corrcoef(noise, noise_nbrs_means)[0, 1]
         if np.abs(rho - corr) < best_result:
             best_result = np.abs(rho - corr)
@@ -208,19 +184,17 @@ def generate_noise_like(
     return noise
 
 
-def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
-    x = x.copy()
-
+def get_nbrs_means(x: np.ndarray, edge_list: np.ndarray) -> np.ndarray:
+    """Computes the mean of each node's neighbors."""
     nbrs = [[] for _ in range(edge_list.shape[0])]
     for i, j in edge_list:
         nbrs[i].append(j)
         nbrs[j].append(i)
 
-    # input the neighbors
     xbar = np.nanmean(x)
     nbrs_means = np.zeros(len(x))
     for i in range(len(x)):
-        if nbrs[i]:
+        if not nbrs[i]:
             nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
         else:
             valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
@@ -228,6 +202,27 @@ def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
                 nbrs_means[i] = np.mean(valid)
             else:
                 nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
+
+    return nbrs_means
+
+
+def get_nbrs_corr(
+    x: np.ndarray, edge_list: np.ndarray, nbrs_means: np.ndarray | None = None
+) -> float:
+    """Computes the correlation between each node and its neighbors."""
+    if nbrs_means is None:
+        nbrs_means = get_nbrs_means(x, edge_list)
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
+    rho = np.corrcoef(x_, nbrs_means)[0, 1]
+    return rho
+
+
+def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
+    x = x.copy()
+
+    xbar = np.nanmean(x)
+    nbrs_means = get_nbrs_means(x, edge_list)
 
     x_ = x.copy()
     x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
