@@ -53,8 +53,6 @@ def main(cfg: DictConfig):
     # graph
     logging.info(f"Reading graph from {graph_path}.")
     graph = nx.read_graphml(graph_path)
-    node2ix = {n: i for i, n in enumerate(df.index)}
-    edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
 
     # === Read covariate groups ===
     if spaceenv.covariates is not None:
@@ -66,7 +64,7 @@ def main(cfg: DictConfig):
         covar_groups = df.columns.difference([spaceenv.treatment, spaceenv.outcome])
         covar_groups = covar_groups.tolist()
         covariates = covar_groups
-    d = len(covariates)
+    # d = len(covariates)
 
     # maintain only covariates, treatment, and outcome
     tmp = df.shape[1]

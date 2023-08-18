@@ -2,7 +2,7 @@ upload_dataverse: demo
 download_dataverse: harvard
 upload: false
 token: null
-training_threads: 2
+training_threads: 4
 spaceenvs:
   - climate_relhum_wfsmoke_cont
   - climate_wfsmoke_minrty_disc

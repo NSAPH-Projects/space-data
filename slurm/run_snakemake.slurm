@@ -25,13 +25,13 @@ else
 fi
 
 if [ $singularity_within_snakemake == 1 ]; then
-    job="snakemake -j --use-singularity"
+    job="snakemake -j --nolock --use-singularity"
 else
     singularity_file="spacedata_multi.sif"
     if [ ! -f $singularity_file ]; then
         singularity pull --name docker://mauriciogtec/spacedata:multi
     fi
-    job="singularity exec $singularity_file snakemake -j"
+    job="singularity exec $singularity_file snakemake --nolock -j"
 fi
 
 options="--configfile conf/pipeline.yaml -C \
