@@ -236,6 +236,44 @@ def main(cfg: DictConfig):
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
+
+    # model leaderboard from autogluon results
+    results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
+
+    logging.info("Plotting counterfactuals and residuals.")
+    ix = np.random.choice(len(df), cfg.num_plot_samples)
+    cfpred_sample = mu_cf.iloc[ix].values
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
+    ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
+
+    # Draw a line for the ATE
+    ax.plot(
+        avals,
+        mu_cf.mean(),
+        color="red",
+        linestyle="--",
+        label="Average Treatment Effect",
+        alpha=0.5,
+    )
+    ax.legend()
+
+    ax.set_xlabel(spaceenv.treatment)
+    ax.set_ylabel(spaceenv.outcome)
+    ax.set_title("Counterfactuals")
+    fig.savefig(f"{output_dir}/counterfactuals.png", dpi=300, bbox_inches="tight")
+
+    logging.info("Plotting histogram of true and synthetic residuals.")
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.hist(residuals, bins=20, density=True, alpha=0.5, label="True")
+    ax.hist(synth_residuals, bins=20, density=True, alpha=0.5, label="Synthetic")
+    ax.set_xlabel("Residuals")
+    ax.set_ylabel("Density")
+    ax.set_title("Residuals")
+    ax.legend()
+    fig.savefig(f"{output_dir}/residuals.png", dpi=300, bbox_inches="tight")
+
+
     # === Compute feature importance ===
     logging.info(f"Computing feature importance.")
     featimp = predictor.feature_importance(
@@ -403,42 +441,6 @@ def main(cfg: DictConfig):
     # save metadata and resolved config
     with open(f"{output_dir}/metadata.yaml", "w") as f:
         yaml.dump(metadata, f, sort_keys=False)
-
-    # model leaderboard from autogluon results
-    results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
-
-    logging.info("Plotting counterfactuals and residuals.")
-    ix = np.random.choice(len(df), cfg.num_plot_samples)
-    cfpred_sample = mu_cf.iloc[ix].values
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
-    ax.scatter(A.iloc[ix], mu.iloc[ix], color="red")
-
-    # Draw a line for the ATE
-    ax.plot(
-        avals,
-        mu_cf.mean(),
-        color="red",
-        linestyle="--",
-        label="Average Treatment Effect",
-        alpha=0.5,
-    )
-    ax.legend()
-
-    ax.set_xlabel(spaceenv.treatment)
-    ax.set_ylabel(spaceenv.outcome)
-    ax.set_title("Counterfactuals")
-    fig.savefig(f"{output_dir}/counterfactuals.png", dpi=300, bbox_inches="tight")
-
-    logging.info("Plotting histogram of true and synthetic residuals.")
-    fig, ax = plt.subplots(figsize=(4, 3))
-    ax.hist(residuals, bins=20, density=True, alpha=0.5, label="True")
-    ax.hist(synth_residuals, bins=20, density=True, alpha=0.5, label="Synthetic")
-    ax.set_xlabel("Residuals")
-    ax.set_ylabel("Density")
-    ax.set_title("Residuals")
-    ax.legend()
-    fig.savefig(f"{output_dir}/residuals.png", dpi=300, bbox_inches="tight")
 
 
 if __name__ == "__main__":
