@@ -19,35 +19,37 @@ spaceenv:
     outcome:   # log, symlog, logit
     treatment:   # log, symlog, logit
     covariates:
+
+  fill_missing_covariate_values: true  # on covariates
   
   # augmentations for the treatment
-  bsplines: true  # for continuous treatments only
+  bsplines: false  # for continuous treatments only
   bsplines_degree: 3
   bsplines_df: 5
-  binary_treatment_iteractions: true  # add interaction columns for binary treatments
+  binary_treatment_iteractions: false  # add interaction columns for binary treatments
 
   seed: 42
 
   autogluon:
     fit:
-      presets: best_quality
-      time_limit: 3600  # in seconds, null means no limit
+      presets: medium_quality
+      time_limit: 1800  # in seconds, null means no limit
                         # this paremeter can be overriden in the
                         # config of each spaceenv for complex envs.
                         # similarly with the time limits below, presets
                         # and hyperparmeters
       hyperparameters: null
     leave_out_fit:  # used for confounding scores
-      presets: best_quality
-      time_limit: 3600
+      presets: medium_quality
+      time_limit: 1800
       hyperparameters: null
     feat_importance:
-      time_limit: 3600
+      time_limit: 1800
 
   spatial_tuning:  
     init_frac: 0.05  # usually 35-50% train with 2 levels/buffer
-    levels: 2
-    buffer: 0
+    levels: 1
+    buffer: 1
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number

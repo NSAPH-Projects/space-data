@@ -153,6 +153,16 @@ def main(cfg: DictConfig):
     node2ix = {n: i for i, n in enumerate(df.index)}
     edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
 
+    # fill missing if needed
+    if spaceenv.fill_missing_covariate_values:
+        for c in covariates:
+            col_vals = df[c].values
+            frac_missing = np.isnan(col_vals).mean()
+            logging.info(f"Filling {100 * frac_missing:.2f}% missing values for {c}.")
+            nbrs_means = utils.get_nbrs_means(col_vals, edge_list)
+            col_vals[np.isnan(col_vals)] = nbrs_means[np.isnan(col_vals)]
+            df[c] = col_vals
+
     # remove nans in outcome
     outcome_nans = np.isnan(df[spaceenv.outcome])
     logging.info(f"Removing {outcome_nans.sum()} for training since missing outcome.")
@@ -201,6 +211,8 @@ def main(cfg: DictConfig):
     synth_residuals = utils.generate_noise_like(residuals, edge_list)
     Y_synth = predictor.predict(df) + synth_residuals
     Y_synth.name = "Y_synth"
+
+    scale = np.std(Y_synth)
 
     residual_smoothness = utils.moran_I(residuals, edge_list)
     synth_residual_smoothness = utils.moran_I(synth_residuals, edge_list)
@@ -299,9 +311,11 @@ def main(cfg: DictConfig):
             if c + "_interact" in featimp:
                 featimp.pop(c + "_interact")
 
-    yscale = np.nanstd(df[spaceenv.outcome])
+    # yscale = np.nanstd(df[spaceenv.outcome])
+    # replace with synthetic outcome standard deviation
+    # yscale = np.nanstd(Y_synth)
     treat_imp = featimp[spaceenv.treatment]
-    featimp = {c: float(featimp.get(c, 0.0)) / yscale for c in covariates}
+    featimp = {c: float(featimp.get(c, 0.0)) / scale for c in covariates}
     featimp["treatment"] = treat_imp
 
     # === Fitting model to treatment variable for confounding score ===
@@ -356,7 +370,6 @@ def main(cfg: DictConfig):
     cs_erf = {}
     cs_ite = {}
     cs_ate = {}  # will be empty if not binary
-    scale = np.std(Y_synth)
 
     for i, g in enumerate(covar_groups):
         key_ = list(g.keys())[0] if isinstance(g, dict) else g
