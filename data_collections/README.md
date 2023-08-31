@@ -1,6 +1,6 @@
 ## README
 
-To lean more about SpaCE datasets, have a look at the following data dictionaries:
+This documentation includes details about the data sources of our currently supported data collections:
 
 - [dataset_air_pollution_mortality_us.md](docs_air_pollution_mortality_us.md)
 - [dataset_cdc_atsdr_svi_tx.md](docs_cdc_atsdr_svi_tx.md)
