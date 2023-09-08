@@ -21,3 +21,4 @@ covariates:
   - housing:
     - owner_occupied_housing_units
     - renter_occupied_housing_units
+treatment_max_bins: 50  # reduce resolution because of large data size
