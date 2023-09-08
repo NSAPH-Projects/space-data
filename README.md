@@ -30,6 +30,7 @@ Please note that the creation of the conda environment may fail on Intel-based M
 To reproduce all the spaceenvs, simply run the following command:
 
 ```bash
+export <DATAVERSE_TOKEN>=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxoad.py spaceenv=<spaceenv> 
 snakemake -j --configfile conf/pipeline.yaml -C dataverse=demo upload=true
 ```
 
@@ -68,8 +69,7 @@ The outputs will be saved in `trained_spaceenvs/<spaceenv>`. The outputs are:
 You will need a Harvard (or other) Dataverse API token to upload the dataset in the SpaCE collection. Export it as an environment variable as follows:
 
 ```
-export <DATAVERSE_TOKEN>=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-python upload.py spaceenv=<spaceenv> dataverse=<dataverse>
+export <DATAVERSE_TOKEN>=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxoad.py spaceenv=<spaceenv> dataverse=<dataverse>
 ```
 
 Each dataverse destination can have a different token. These name of the token is specified at `conf/dataverse/<dataverse>.yaml` under the field token (e.g. token=HARVARD_DATAVERSE_TOKEN).

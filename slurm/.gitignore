@@ -1,4 +1,4 @@
 *
 !README.md
 !.gitignore
-!run_snakemake.slurm
+!run_snakemake*.slurm

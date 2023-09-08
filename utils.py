@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from omegaconf.listconfig import ListConfig
 from scipy.linalg import cholesky, solve_triangular
+from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import splu
 
 
 def scale_variable(
@@ -132,58 +134,111 @@ def generate_noise_like_by_penalty(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     return noise
 
 
-def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
+def generate_noise_like(
+    x: np.ndarray, edge_list: np.ndarray, attempts: int = 10
+) -> np.ndarray:
     """Injects noise into residuals using a Gaussian Markov Random Field."""
-    # find average correlation between a point and its neighbors mean
-    nbrs2ix = {n: i for i, n in enumerate(x.index)}
-    nbrs = [[nbrs2ix[i] for i in nx.neighbors(graph, n)] for n in x.index]
-    x_ = x.values
-    nbr_means = np.array([np.nanmean(x_[nbrs[i]]) for i in range(len(x))])
-    x__ = (x_ - np.nanmean(x_)) / np.nanstd(x_)
-    nbr_means_ = (nbr_means - np.nanmean(nbr_means)) / np.nanstd(nbr_means)
-    corr = np.nansum(x__ * nbr_means_) / len(x)
+    n = len(x)
+    nbrs_means = get_nbrs_means(x, edge_list)
+    rho = get_nbrs_corr(x, edge_list, nbrs_means=nbrs_means)
 
-    # scaled graph laplacian
-    Q = nx.laplacian_matrix(graph).toarray() / np.mean([len(n) for n in nbrs])
+    # 1. Build precision matrix
+    # Arrays to hold the data, row indices, and column indices for Q
+    data = []
+    rows = []
+    cols = []
 
-    # add variance to diagonal
-    Q = corr * Q + (1 - corr + 1e-4) * np.eye(Q.shape[0])
-    logging.info(f"Residual neighbor correlation: {corr:.4f}")
+    # Off-diagonal entries and compute degree for diagonal
+    degree = np.zeros(n)
+    for i, j in edge_list:
+        data.extend([-rho, -rho])
+        rows.extend([i, j])
+        cols.extend([j, i])
+        degree[i] += 1
+        degree[j] += 1
 
-    # sample from GMRF
-    Z = np.random.randn(Q.shape[0])
-    L = cholesky(Q, lower=True)
-    noise = solve_triangular(L, Z, lower=True).T
+    # Add diagonal entries
+    data.extend(np.maximum(degree, 0.1))
+    rows.extend(range(n))
+    cols.extend(range(n))
+
+    # build precision matrix
+    Q = csc_matrix((data, (rows, cols)), shape=(n, n))
+    factorization = splu(Q)
+
+    best_result = np.inf
+    best_corr = None
+    best_attempt = None
+    for _ in range(attempts):
+        noise = factorization.solve(np.random.normal(size=n))
+        noise_nbrs_means = get_nbrs_means(noise, edge_list)
+        corr = np.corrcoef(noise, noise_nbrs_means)[0, 1]
+        if np.abs(rho - corr) < best_result:
+            best_result = np.abs(rho - corr)
+            best_corr = corr
+            best_attempt = noise
 
     # scale noise to have same variance as residuals
-    noise = noise / noise.std() * np.nanstd(x)
+    noise = best_attempt / best_attempt.std() * np.nanstd(x)
 
     return noise
 
 
-def moran_I(x: pd.Series, A: np.ndarray) -> float:
-    x = x.values
+def get_nbrs_means(x: np.ndarray, edge_list: np.ndarray) -> np.ndarray:
+    """Computes the mean of each node's neighbors."""
+    nbrs = [[] for _ in range(edge_list.shape[0])]
+    for i, j in edge_list:
+        nbrs[i].append(j)
+        nbrs[j].append(i)
 
-    # input the mean of x when there nan values
-    x[np.isnan(x)] = np.nanmean(x)
+    xbar = np.nanmean(x)
+    nbrs_means = np.zeros(len(x))
+    for i in range(len(x)):
+        if not nbrs[i]:
+            nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
+        else:
+            valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
+            if valid:
+                nbrs_means[i] = np.mean(valid)
+            else:
+                nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
 
-    # Compute mean of attribute values
-    x_bar = np.mean(x)
+    return nbrs_means
+
+
+def get_nbrs_corr(
+    x: np.ndarray, edge_list: np.ndarray, nbrs_means: np.ndarray | None = None
+) -> float:
+    """Computes the correlation between each node and its neighbors."""
+    if nbrs_means is None:
+        nbrs_means = get_nbrs_means(x, edge_list)
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
+    rho = np.corrcoef(x_, nbrs_means)[0, 1]
+    return float(rho)
+
+
+def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
+    x = x.copy()
+
+    xbar = np.nanmean(x)
+    nbrs_means = get_nbrs_means(x, edge_list)
+
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
 
     # Subtract mean from attribute values
-    x_diff = x - x_bar
-
-    # Compute denominator: sum of squared differences from mean
-    denominator = np.sum(x_diff**2) + 1e-8
+    x_diff = x_ - xbar
 
     # Compute numerator: sum of product of weight and pair differences from mean
-    # Matrix multiplication to achieve vectorization
-    numerator = np.sum(A * np.outer(x_diff, x_diff))
+    src_diff = x_diff[edge_list[:, 0]]
+    dst_diff = x_diff[edge_list[:, 1]]
+    numerator = np.sum(src_diff * dst_diff) * len(x_diff)
 
-    # Compute Moran's I
-    I = len(x) / np.sum(A) * (numerator / denominator)
+    # Compute denominator: sum of squared differences from mean
+    denominator = np.sum(x_diff**2) * len(edge_list)
 
-    return float(I)
+    return float(numerator / denominator)
 
 
 def double_zip_folder(folder_path, output_path):

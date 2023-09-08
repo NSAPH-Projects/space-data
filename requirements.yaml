@@ -1,4 +1,4 @@
-name: spacedata
+name: spacedata2
 channels:
   - defaults
   - conda-forge
@@ -7,18 +7,19 @@ channels:
 dependencies:
   - python=3.10
   - snakemake=7.30.2
+  # - autogluon
   - pip
   - pip:
-    - autogluon==0.8.2
+    # - autogluon==0.8.2
     - pyDataverse==0.3.1
     - ipykernel
     - black
     - networkx
     - hydra-core==1.3.2
-    # - vowpalwabbit>=9,<9.9
-    # - imodels>=1.3.10,<1.4.0
-    # - catboost>=1.1,<1.3
-    # - xgboost>=1.6,<1.8
-    # - fastai>=2.3.1,<2.8
-    # # - ray[tune]>=2.2.0,<2.4.0  # seems problematic
-    # - autogluon.tabular==0.8.2
+    - vowpalwabbit>=9,<9.9
+    - imodels>=1.3.10,<1.4.0
+    - catboost>=1.1,<1.3
+    - xgboost>=1.6,<1.8
+    - fastai>=2.3.1,<2.8
+    # - ray[tune]>=2.2.0,<2.4.0  # seems problematic
+    - autogluon.tabular==0.8.2
