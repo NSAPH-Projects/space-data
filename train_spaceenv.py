@@ -1,4 +1,5 @@
 import logging
+from glob import glob
 
 import hydra
 import matplotlib.pyplot as plt
@@ -34,17 +35,30 @@ def main(cfg: DictConfig):
 
     # == Read collection graph/data ==
     original_cwd = hydra.utils.get_original_cwd()
-    collection_path = f"{original_cwd}/data_collections/{spaceenv.collection}/data.tab"
-    graph_path = f"{original_cwd}/data_collections/{spaceenv.collection}/graph.graphml"
+    collection_path = f"{original_cwd}/data_collections/{spaceenv.collection}/"
+    graph_path = f"{original_cwd}/data_collections/{spaceenv.collection}/"
 
     # data
     logging.info(f"Reading data collection from {collection_path}:")
-    df_read_opts = {
-        "sep": "\t",
-        "index_col": spaceenv.index_col,
-        "dtype": {spaceenv.index_col: str},
-    }
-    df = pd.read_csv(collection_path, **df_read_opts)
+    data_file = glob(f"{collection_path}/data*")[0]
+    data_ext = data_file.split(".")[-1]
+    if data_ext == "csv":
+        df_read_opts = {
+            "sep": "\t",
+            "index_col": spaceenv.index_col,
+            "dtype": {spaceenv.index_col: str},
+        }
+        df = pd.read_csv(data_file, **df_read_opts)
+    elif data_ext == "parquet":
+        df = pd.read_parquet(data_file)
+    else:
+        raise ValueError(f"Unknown file extension {data_ext}.")
+    
+    # remove duplicate indices
+    dupl = df.index.duplicated(keep="first")
+    if dupl.sum() > 0:
+        logging.info(f"Removed {dupl.sum()}/{df.shape[0]} duplicate indices.")
+        df = df[~dupl]
 
     tmp = df.shape[0]
     df = df[df[spaceenv.treatment].notna()]
@@ -52,7 +66,13 @@ def main(cfg: DictConfig):
 
     # graph
     logging.info(f"Reading graph from {graph_path}.")
-    graph = nx.read_graphml(graph_path)
+    graph_file = glob(f"{graph_path}/graph*")[0]
+
+    # deal with possible extensions for the graph
+    if graph_file.endswith("graphml") or graph_file.endswith("graphml.gz"):
+        graph = nx.read_graphml(graph_file)
+    else:
+        raise ValueError(f"Unknown file extension of file {graph_file}.")
 
     # === Read covariate groups ===
     if spaceenv.covariates is not None:
@@ -64,6 +84,7 @@ def main(cfg: DictConfig):
         covar_groups = df.columns.difference([spaceenv.treatment, spaceenv.outcome])
         covar_groups = covar_groups.tolist()
         covariates = covar_groups
+        spaceenv.covariates = covariates
     # d = len(covariates)
 
     # maintain only covariates, treatment, and outcome
