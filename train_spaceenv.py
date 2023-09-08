@@ -78,8 +78,11 @@ def main(cfg: DictConfig):
 
     elif graph_file.endswith("tar.gz"):
         with tarfile.open(graph_file, "r:gz") as tar:
-            edges = pd.read_parquet(tar.extractfile("edges.parquet"))
-            coords = pd.read_parquet(tar.extractfile("coords.parquet"))
+            # list files in tar
+            tar_files = tar.getnames()
+
+            edges = pd.read_parquet(tar.extractfile("graph/edges.parquet"))
+            coords = pd.read_parquet(tar.extractfile("graph/coords.parquet"))
 
         graph = nx.Graph()
         graph.add_nodes_from(coords.index)
@@ -182,7 +185,7 @@ def main(cfg: DictConfig):
     logging.info(f"Homegenizing data and graph")
     logging.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
     graph = nx.subgraph(graph, intersection)
-    df = df.loc[intersection]
+    df = df.loc[list(intersection)]
 
     # obtain final edge list
     node2ix = {n: i for i, n in enumerate(df.index)}
@@ -480,8 +483,10 @@ def main(cfg: DictConfig):
         coords = pd.DataFrame.from_dict(dict(graph.nodes(data=True)), orient="index")
         # save again as a tar.gz
         with tarfile.open(f"{output_dir}/graph.tar.gz", "w:gz") as tar:
-            edges.to_parquet(tarfile.TarInfo("edges.parquet"))
-            coords.to_parquet(tarfile.TarInfo("coords.parquet"))
+            os.makedirs("graph", exist_ok=True)
+            edges.to_parquet("graph/edges.parquet")
+            coords.to_parquet("graph/coords.parquet")
+            tar.add("graph/")
 
     metadata = {
         "base_name": f"{spaceenv.base_name}",
