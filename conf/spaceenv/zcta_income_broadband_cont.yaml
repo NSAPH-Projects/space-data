@@ -1,5 +1,5 @@
 collection: broadband_econ_zcta
-outcome: "pct_highschool"
+outcome: log_median_income
 treatment: "BROADBAND USAGE"
 covariates:
   - race:
@@ -15,8 +15,8 @@ covariates:
     - age_10_14
     - age_15_19
     - age_20_24
-  - income:
-    - log_median_income
+  - poverty:
+    - pct_highschool
     - pct_poverty
   - housing:
     - owner_occupied_housing_units

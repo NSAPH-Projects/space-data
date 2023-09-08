@@ -186,7 +186,7 @@ def generate_noise_like(
 
 def get_nbrs_means(x: np.ndarray, edge_list: np.ndarray) -> np.ndarray:
     """Computes the mean of each node's neighbors."""
-    nbrs = [[] for _ in range(edge_list.shape[0])]
+    nbrs = [[] for _ in range(x.shape[0])]
     for i, j in edge_list:
         nbrs[i].append(j)
         nbrs[j].append(i)

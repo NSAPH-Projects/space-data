@@ -1,2 +1,2 @@
-graph: graph_pm25comps.graphml.gz
+graph: graph_pm25comps.tar.gz
 data: raster_pm25comps.parquet
