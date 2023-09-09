@@ -1,6 +1,4 @@
 data_dict = {
-    "broadband_econ_zcta": {
-        
     "cdc_atsdr_svi_tx": {
         "primary": {
             "E_TOTPOP": "E_HU",
