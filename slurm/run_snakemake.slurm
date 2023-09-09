@@ -1,10 +1,9 @@
 #!/bin/bash
 
-#SBATCH -N 1
-#SBATCH -n 24
-#SBATCH -t 0-12:00:00
+#SBATCH -n 1
+#SBATCH -t 0-24:00:00
 #SBATCH -p shared
-#SBATCH --mem=88GB
+#SBATCH --mem=8G
 #SBATCH -o slurm/slurm.%N.%j.out
 #SBATCH -e slurm/slurm.%N.%j.err
 #SBATCH --mail-type=ALL
@@ -24,17 +23,10 @@ else
     exit 1
 fi
 
-if [ $singularity_within_snakemake == 1 ]; then
-    job="snakemake --rerun-incomplete --nolock -j --use-singularity"
-else
-    singularity_file="spacedata_multi.sif"
-    if [ ! -f $singularity_file ]; then
-        singularity pull --name docker://mauriciogtec/spacedata:multi
-    fi
-    job="singularity exec $singularity_file snakemake --rerun-incomplete --nolock -j"
-fi
+job="snakemake --rerun-incomplete --nolock --use-singularity"
+slurm_options="/usr/bin/sbatch --ntasks {cluster.ntasks} -N {cluster.N} -t {cluster.t} \
+    --cpus-per-task {cluster.cpus_per_task} -p {cluster.p} --mem {cluster.mem} -o {cluster.output} \
+    -e {cluster.error} --mail-type={cluster.mail_type}"
+options="--configfile conf/pipeline.yaml -C upload=$upload token=$token upload_dataverse=$dataverse"
 
-options="--configfile conf/pipeline.yaml -C \
-    upload=$upload token=$token upload_dataverse=$dataverse"
-
-$job $options
+$job $options --cluster "${slurm_options}" --cluster-config conf/cluster.yaml -j 12
