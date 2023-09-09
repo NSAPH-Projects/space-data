@@ -33,6 +33,20 @@ broadband_econ_zcta:
     age_15_19: "Population 15-19 (Census)"
     age_20_24: "Population 20-24 (Census)"
     population_below_poverty_level: "Population below poverty level (Census)"
+    pct_highschool_graduates: "Percent high school graduates (Census, Processed)"
+    log_median_income: "Log median income (Census, Processed)"
+    log_total_population: "Log total population (Census, Processed)"
+    pct_white: "Percent white (Census, Processed)"
+    pct_black: "Percent black (Census, Processed)"
+    pct_asian: "Percent asian (Census, Processed)"
+    pct_poverty: "Percent below poverty level (Census, Processed)"
+    pct_age_under_5: "Percent population under 5 (Census, Processed)"
+    pct_age_5_9: "Percent population 5-9 (Census, Processed)"
+    pct_age_10_14: "Percent population 10-14 (Census, Processed)"
+    pct_age_15_19: "Percent population 15-19 (Census, Processed)"
+    pct_age_20_24: "Percent population 20-24 (Census, Processed)"
+    pop_dens: "Population density (Census, Processed)"
+    BROADBAND USAGE PERCENTAGE: "Broadband usage percentage (Microsoft)"
 pm25_comps_hires_grid:
   graph_path: data_collections/pm25_comps_hires_grid/graph.tar.gz
   data_path: data_collections/pm25_comps_hires_grid/data.parquet
