@@ -18,8 +18,10 @@ def main(cfg: DictConfig):
     for obj, file in cfg.collection.items():
         if obj == "base_name" or file is None:
             continue
-        ext = os.path.splitext(file)[1]
-        path = f"{obj}{ext}"  # hydra already changed the working directory
+        ext = file.split(".")[-1]
+        if ext == "gz":
+            ext = file.split(".")[-2] + "." + ext
+        path = f"{obj}.{ext}"  # hydra already changed the working directory
         logging.info(f"Downloading {file}.")
 
         if file not in file2id:

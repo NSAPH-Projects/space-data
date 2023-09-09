@@ -1,0 +1,36 @@
+config_temp: |
+  base_name: {}
+  data_path: {}
+  graph_path: {}
+  outcome: {}
+  treatment: {}
+  has_coordinates: true
+  index_col: 0
+
+overview_temp: |
+  'Number of Variables': {}
+  'Number of Observations': {}
+  'Missing Cells': {}
+  'Missing cells (%)': {}%,
+  'Duplicate Rows': {}
+  'Duplicate Rows (%)': {}%,
+  'Total Size In Memory': {} MB
+
+data_dict_temp: |
+  # Overview
+  
+  {}
+  
+  # Variables
+  
+  {}
+  
+  # Correlations
+  
+  ![]({})
+  
+  # Sample
+  
+  {}
+  
+  Generated with `notebooks/201_make_data_dict.ipynb`.

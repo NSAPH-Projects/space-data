@@ -1,28 +1,28 @@
 # Overview
 
-| Properties             | Value                                                                                                                                                                                                                                                           |
-|:-----------------------|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Description            | The dataset includes election outcomes, specifically the percentage of the population in each county that voted for the Democratic Party in 2020. It also contains various aggregated data, such as demographics and employment statistics, from 2019 and 2020. |
-| Spatial Coverage       | Continental USA                                                                                                                                                                                                                                                 |
-| Spatial Resolution     | county                                                                                                                                                                                                                                                          |
-| Temporal Coverage      | 2019 and 2020                                                                                                                                                                                                                                                   |
-| Temporal Resolution    | annual                                                                                                                                                                                                                                                          |
-| Original Data Sources  | https://github.com/evangambit/JsonOfCounties                                                                                                                                                                                                                    |
-| Data Processing Code   | `notebooks/101_election_data.ipynb`                                                                                                                                                                                                                             |
-| Data Location          | https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS                                                                                                                                                                                 |
-| Number of Variables    | 48                                                                                                                                                                                                                                                              |
-| Number of Observations | 3142                                                                                                                                                                                                                                                            |
-| Missing Cells          | 985                                                                                                                                                                                                                                                             |
-| Missing cells (%)      | 31.35%                                                                                                                                                                                                                                                          |
-| Duplicate Rows         | 0                                                                                                                                                                                                                                                               |
-| Duplicate Rows (%)     | 0.0%                                                                                                                                                                                                                                                            |
-| Total Size In Memory   | 1.15 MB                                                                                                                                                                                                                                                         |
+| Properties             | Value                                                                                                                                                                                                                                                            |
+|:-----------------------|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Description            | The dataset includes election outcomes, specifically the percentage of the population in each county that voted for the Democratic Party in 2020. It also contains various aggregated data, such as demographics and  employment statistics, from 2019 and 2020. |
+| Spatial Coverage       | Continental USA                                                                                                                                                                                                                                                  |
+| Spatial Resolution     | county                                                                                                                                                                                                                                                           |
+| Temporal Coverage      | 2019 and 2020                                                                                                                                                                                                                                                    |
+| Temporal Resolution    | annual                                                                                                                                                                                                                                                           |
+| Original Data Sources  | https://github.com/evangambit/JsonOfCounties                                                                                                                                                                                                                     |
+| Data Processing Code   | `notebooks/101_election_data.ipynb`                                                                                                                                                                                                                              |
+| Data Location          | https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS                                                                                                                                                                                  |
+| Number of Variables    | 48                                                                                                                                                                                                                                                               |
+| Number of Observations | 3142                                                                                                                                                                                                                                                             |
+| Missing Cells          | 985                                                                                                                                                                                                                                                              |
+| Missing cells (%)      | 31.35%                                                                                                                                                                                                                                                           |
+| Duplicate Rows         | 0                                                                                                                                                                                                                                                                |
+| Duplicate Rows (%)     | 0.0%                                                                                                                                                                                                                                                             |
+| Total Size In Memory   | 1.15 MB                                                                                                                                                                                                                                                          |
 
 # Variables
 
 | Variable Name | Description |
 | ------------- | ----------- |
-| `fips` | Federal Information Processing Standard code, a unique identifier for counties and county equivalents in the United States. |
+| `fips` | Federal Information Processing Standard code, a unique identifier for counties and county equivalents  in the United States. |
 | `noaa_prcp` | Average precipitation recorded by the National Oceanic and Atmospheric Administration. |
 | `noaa_snow` | Average snowfall recorded by the National Oceanic and Atmospheric Administration. |
 | `noaa_temp` | Average temperature recorded by the National Oceanic and Atmospheric Administration. |
@@ -42,7 +42,7 @@
 | `bls_unemployed` | Number of unemployed people as recorded by the Bureau of Labor Statistics. |
 | `life-expectancy` | Average life expectancy of individuals in the area. |
 | `cdc_police_deaths_total` | Total number of deaths caused by police as recorded by the Centers for Disease Control and Prevention. |
-| `cdc_police_deaths_unarmed` | Number of deaths of unarmed individuals caused by police as recorded by the Centers for Disease Control and Prevention. |
+| `cdc_police_deaths_unarmed` | Number of deaths of unarmed individuals caused by police as recorded by the Centers for Disease  Control and Prevention. |
 | `police_deaths` | Total number of police deaths in the area. |
 | `avg_income` | Average income of individuals in the area. |
 | `cs_ed_below_highschool` | Population count with an educational attainment level below high school. |
@@ -73,7 +73,7 @@
 
 # Correlations
 
-![](figs/corr_election_us.png)
+![](figs/corr_corr_election_us.png)
 
 # Sample
 
@@ -84,6 +84,5 @@
 |  31129 |        27.7 |        22.2 |        51.5 |           521.2 |            25.6 |            51   |            77.1 |            52.8 |      2059 |        2089 |              4148 |      nan       |       nan       |              1.42857 |              2454 |           2388 |               66 |             80.12 |                         0 |                           0 |               0 |        50836 |                      8.1 |               34   |                 37   |                  20.9 |           11.2 |             12.89 |             3246 |                2783 |                5460 |            5385 |                  14.9405 |              18.2293 |               35.3 |                      31.3 |                          14.8 |                         88236 |                         20243 |       0.261813 |       0.466008 |         0.272179 |   0.937801 | 0.00313404 | 0.0135005  |     0.0303761 |            17.7594 |
 |  31101 |        20   |        25   |        50   |           991.4 |            26.7 |            48.1 |            75.4 |            50.4 |      4052 |        3982 |              8034 |        1.38095 |       nan       |              2.09524 |              4547 |           4400 |              147 |             79.24 |                         0 |                           0 |               0 |        45896 |                      8.5 |               31.7 |                 39.3 |                  20.5 |           11.1 |             13.4  |             3246 |                2783 |                6312 |            5584 |                  14.6555 |              18.2972 |               32.4 |                      28.3 |                          17.8 |                         96476 |                         19538 |       0.266119 |       0.462908 |         0.270973 |   0.888723 | 0.0112024  | 0.00672143 |     0.0777944 |            17.484  |
 |  31137 |        25.5 |        26.7 |        50.3 |           705.8 |            25.7 |            49.4 |            75   |            51.9 |      4527 |        4507 |              9034 |        1.09524 |       nan       |              1.95238 |              4953 |           4805 |              148 |             79.86 |                         0 |                           0 |               0 |        52792 |                      6.7 |               29.9 |                 39.9 |                  23.5 |           10   |             12.89 |             3246 |                2783 |                5460 |            5385 |                  13.3691 |              16.169  |               37.8 |                      25.7 |                          13.2 |                        104152 |                         27004 |       0.314147 |       0.474098 |         0.211756 |   0.917866 | 0.00387425 | 0.0046491  |     0.0583352 |            15.013  |
-
 
 Generated with `notebooks/201_make_data_dict.ipynb`.

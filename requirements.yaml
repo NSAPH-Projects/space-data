@@ -1,4 +1,4 @@
-name: spacedata2
+name: spacedata
 channels:
   - defaults
   - conda-forge
@@ -7,7 +7,7 @@ channels:
 dependencies:
   - python=3.10
   - snakemake=7.30.2
-  # - autogluon
+  - lxml
   - pip
   - pip:
     # - autogluon==0.8.2

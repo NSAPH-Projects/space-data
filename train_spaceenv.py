@@ -1,4 +1,7 @@
 import logging
+import os
+from glob import glob
+import tarfile
 
 import hydra
 import matplotlib.pyplot as plt
@@ -8,8 +11,8 @@ import pandas as pd
 import yaml
 from autogluon.tabular import TabularDataset, TabularPredictor
 from omegaconf import DictConfig, OmegaConf
-from scipy.interpolate import BSpline
 from pytorch_lightning import seed_everything
+from scipy.interpolate import BSpline
 
 import utils
 
@@ -34,17 +37,32 @@ def main(cfg: DictConfig):
 
     # == Read collection graph/data ==
     original_cwd = hydra.utils.get_original_cwd()
-    collection_path = f"{original_cwd}/data_collections/{spaceenv.collection}/data.tab"
-    graph_path = f"{original_cwd}/data_collections/{spaceenv.collection}/graph.graphml"
+    collection_path = f"{original_cwd}/data_collections/{spaceenv.collection}/"
+    graph_path = f"{original_cwd}/data_collections/{spaceenv.collection}/"
 
     # data
     logging.info(f"Reading data collection from {collection_path}:")
-    df_read_opts = {
-        "sep": "\t",
-        "index_col": spaceenv.index_col,
-        "dtype": {spaceenv.index_col: str},
-    }
-    df = pd.read_csv(collection_path, **df_read_opts)
+    data_file = glob(f"{collection_path}/data*")[0]
+
+    if data_file.endswith("csv"):
+        df_read_opts = {
+            "sep": "\t",
+            "index_col": spaceenv.index_col,
+            "dtype": {spaceenv.index_col: str},
+        }
+        df = pd.read_csv(data_file, **df_read_opts)
+
+    elif data_file.endswith("parquet"):
+        df = pd.read_parquet(data_file)
+
+    else:
+        raise ValueError(f"Unknown file extension in {data_file}.")
+
+    # remove duplicate indices
+    dupl = df.index.duplicated(keep="first")
+    if dupl.sum() > 0:
+        logging.info(f"Removed {dupl.sum()}/{df.shape[0]} duplicate indices.")
+        df = df[~dupl]
 
     tmp = df.shape[0]
     df = df[df[spaceenv.treatment].notna()]
@@ -52,7 +70,26 @@ def main(cfg: DictConfig):
 
     # graph
     logging.info(f"Reading graph from {graph_path}.")
-    graph = nx.read_graphml(graph_path)
+    graph_file = glob(f"{graph_path}/graph*")[0]
+
+    # deal with possible extensions for the graph
+    if graph_file.endswith(("graphml", "graphml.gz")):
+        graph = nx.read_graphml(graph_file)
+
+    elif graph_file.endswith("tar.gz"):
+        with tarfile.open(graph_file, "r:gz") as tar:
+            # list files in tar
+            tar_files = tar.getnames()
+
+            edges = pd.read_parquet(tar.extractfile("graph/edges.parquet"))
+            coords = pd.read_parquet(tar.extractfile("graph/coords.parquet"))
+
+        graph = nx.Graph()
+        graph.add_nodes_from(coords.index)
+        graph.add_edges_from(edges.values)
+
+    else:
+        raise ValueError(f"Unknown file extension of file {graph_file}.")
 
     # === Read covariate groups ===
     if spaceenv.covariates is not None:
@@ -64,6 +101,7 @@ def main(cfg: DictConfig):
         covar_groups = df.columns.difference([spaceenv.treatment, spaceenv.outcome])
         covar_groups = covar_groups.tolist()
         covariates = covar_groups
+        spaceenv.covariates = covariates
     # d = len(covariates)
 
     # maintain only covariates, treatment, and outcome
@@ -137,7 +175,7 @@ def main(cfg: DictConfig):
     # test with a subset of the data
     if cfg.debug_subsample is not None:
         logging.info(f"Subsampling since debug_subsample={cfg.debug_subsample}.")
-        ix = np.random.choice(cfg.debug_subsample, 100, replace=False)
+        ix = np.random.choice(range(df.shape[0]), cfg.debug_subsample, replace=False)
         df = df.iloc[ix]
 
     # === Harmonize data and graph ===
@@ -147,7 +185,7 @@ def main(cfg: DictConfig):
     logging.info(f"Homegenizing data and graph")
     logging.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
     graph = nx.subgraph(graph, intersection)
-    df = df.loc[intersection]
+    df = df.loc[list(intersection)]
 
     # obtain final edge list
     node2ix = {n: i for i, n in enumerate(df.index)}
@@ -427,10 +465,28 @@ def main(cfg: DictConfig):
     X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
 
-    tgt_data_path = f"{output_dir}/synthetic_data.csv"
-    tgt_graph_path = f"{output_dir}/graph.graphml"
-    dfout.to_csv(tgt_data_path)
-    nx.write_graphml(graph, tgt_graph_path)
+    # whens saving synthetic data, respect the original data format
+    if data_file.endswith("csv"):
+        dfout.to_csv(f"{output_dir}/synthetic_data.csv")
+    elif data_file.endswith("parquet"):
+        dfout.to_parquet(f"{output_dir}/synthetic_data.parquet")
+
+    # save subgraph in the right format
+    if graph_file.endswith(("graphml", "graphml.gz")):
+        ext = "graphml.gz" if graph_file.endswith("graphml.gz") else "graphml"
+        tgt_graph_path = f"{output_dir}/graph.{ext}"
+        nx.write_graphml(graph, tgt_graph_path)
+
+    elif graph_file.endswith("tar.gz"):
+        # save edges and coords
+        edges = pd.DataFrame(np.array(list(graph.edges)), columns=["source", "target"])
+        coords = pd.DataFrame.from_dict(dict(graph.nodes(data=True)), orient="index")
+        # save again as a tar.gz
+        with tarfile.open(f"{output_dir}/graph.tar.gz", "w:gz") as tar:
+            os.makedirs("graph", exist_ok=True)
+            edges.to_parquet("graph/edges.parquet")
+            coords.to_parquet("graph/coords.parquet")
+            tar.add("graph/")
 
     metadata = {
         "base_name": f"{spaceenv.base_name}",
