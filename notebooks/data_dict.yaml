@@ -1,0 +1,35 @@
+broadband_econ_zcta:
+  data_path: data_collections/broadband_econ_zcta/data.parquet
+  graph_path: data_collections/broadband_econ_zcta/graph.graphml.gz
+  overview:
+    "Description": >
+      This data contains broadband usage information at the ZCTA (zipcode) level from
+      Microsoft's [USBroadband Dataset](https://github.com/microsoft/USBroadbandUsagePercentages)
+      at the zip code (ZCTA) level for the year 2020. Data from the 2020 Census is used
+      to provide demographic and socioeconomic information at the ZCTA level.
+    "Spatial Coverage": "US"
+    "Spatial Resolution": "zcta"
+    "Temporal Coverage": "2020"
+    "Temporal Resolution": "annual"
+    "Original Data Sources": 
+      - https://github.com/microsoft/USBroadbandUsagePercentages
+      - https://www.census.gov/
+    "Data Processing Code": "`notebooks/105_broadband.ipynb`"
+    "Data Location": https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS"
+  var_list:
+    ALAND20: "Land area (square meters) (TIGERLINE)"
+    AWATER20: "Water area (square meters) (TIGERLINE)"
+    total_population: "Total population (Census)"
+    white: "White population  (Census)"
+    median_household_income: "Median household income (Census)"
+    highschool_graduates: "High school graduates (Census)"
+    total_population_over_18: "Total population over 18 (Census)"
+    unemployed_population_16_over: "Unemployed population over 16 (Census)"
+    owner_occupied_housing_units: "Owner occupied housing units (Census)"
+    renter_occupied_housing_units: "Renter occupied housing units (Census)"
+    age_under_5: "Population under 5 (Census)"
+    age_5_9: "Population 5-9 (Census)"
+    age_10_14: "Population 10-14 (Census)"
+    age_15_19: "Population 15-19 (Census)"
+    age_20_24: "Population 20-24 (Census)"
+    population_below_poverty_level: "Population below poverty level (Census)"
