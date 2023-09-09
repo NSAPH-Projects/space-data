@@ -1,41 +1,44 @@
-data_path: data/air_pollution_mortality.tab
-base_name: healthd_pollutn_mortality_cont
+collection: air_pollution_mortality_us
 treatment: qd_mean_pm25
 outcome: cdc_mortality_pct
-graph_path: data/counties.graphml
 covariates:
-  - cs_poverty
-  - cs_hispanic
-  - cs_black
-  - cs_white
-  - cs_native
-  - cs_asian
-  - cs_ed_below_highschool
-  - cs_household_income
-  - cs_median_house_value
-  - cs_other
+  - poverty:
+    - cs_poverty
+    - cs_ed_below_highschool
+  - race:
+    - cs_hispanic
+    - cs_black
+    - cs_white
+    - cs_native
+    - cs_asian
+    - cs_other
   - cs_population_density
   - cdc_mean_bmi
-  - cdc_pct_cusmoker
-  - cdc_pct_sdsmoker
-  - cdc_pct_fmsmoker
-  - cdc_pct_nvsmoker
-  - cdc_pct_nnsmoker
-  - gmet_mean_tmmn
-  - gmet_mean_summer_tmmn
-  - gmet_mean_winter_tmmn
-  - gmet_mean_tmmx
-  - gmet_mean_summer_tmmx
-  - gmet_mean_winter_tmmx
-  - gmet_mean_rmn
-  - gmet_mean_summer_rmn
-  - gmet_mean_winter_rmn
-  - gmet_mean_rmx
-  - gmet_mean_summer_rmx
-  - gmet_mean_winter_rmx
-  - gmet_mean_sph
-  - gmet_mean_summer_sph
-  - gmet_mean_winter_sph
-  - bin_NORTHEAST
-  - bin_SOUTH
-  - bin_WEST
+  - smoking:
+    - cdc_pct_cusmoker
+    - cdc_pct_sdsmoker
+    - cdc_pct_fmsmoker
+    - cdc_pct_nvsmoker
+    - cdc_pct_nnsmoker
+  - temperature:
+    - gmet_mean_tmmn
+    - gmet_mean_summer_tmmn
+    - gmet_mean_winter_tmmn
+    - gmet_mean_tmmx
+    - gmet_mean_summer_tmmx
+    - gmet_mean_winter_tmmx
+  - relative_humidity:
+    - gmet_mean_rmn
+    - gmet_mean_summer_rmn
+    - gmet_mean_winter_rmn
+    - gmet_mean_rmx
+    - gmet_mean_summer_rmx
+    - gmet_mean_winter_rmx
+  - specific_humidity:
+    - gmet_mean_sph
+    - gmet_mean_summer_sph
+    - gmet_mean_winter_sph
+  - region:
+    - bin_NORTHEAST
+    - bin_SOUTH
+    - bin_WEST

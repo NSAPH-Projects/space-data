@@ -1,5 +1,0 @@
-base_name: cdc_atsdr_svi_tx
-data_path: data/cdcatsdrsvi_tx.tab
-graph_path: data/tx_tracts.graphml
-outcome: EP_POV150
-treatment: EP_NOHSDP

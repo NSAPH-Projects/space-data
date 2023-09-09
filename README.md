@@ -24,10 +24,26 @@ conda activate spacedata
 
 Please note that the creation of the conda environment may fail on Intel-based Macs. In such cases, we recommend using the Dockerfile available in the repository.
 
+
+## Reproducibility pipeline of all spaceenv for spacebench
+
+To reproduce all the spaceenvs, simply run the following command:
+
+```bash
+export <DATAVERSE_TOKEN>=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxoad.py spaceenv=<spaceenv> 
+snakemake -j --configfile conf/pipeline.yaml -C dataverse=demo upload=true
+```
+
+Here `dataverse=demo` indicates the dataverse where the data will be uploaded. See the [upload](#uploading) section. To run everything without uploading the data, remove the `upload=true` flag.
+
+Snakemake will make sure not too run things twice when they have been already trained and uploaded.
+
+
 ## 🐢 Getting started
 
+Creating a dataset consists of two steps: training a spaceenv and uploading it to dataverse. In addition, you need to make sure that the the data collection used by a spaceenv exists.
 
-Creating a dataset consists of two steps: training and uploading.
+### Preparing a data collection
 
 ### Training
 
@@ -36,30 +52,29 @@ To create and train a new dataset, add a config file in `conf/spaceenv`. Look at
 To train the model and generate counterfactuals, run the following command:
 
 ```
-python train.py spaceenv=<config_file_name>
+python train_spaceenv.py spaceenv=<config_file_name>
 ```
 
-For example, you can use `python train.py spaceenv=elect_dempct_college` to train the `elect_dempct_college` space environment. In general, `<config_file_name>` can be any of the config files in `conf/spaceenv/`. The config files are `.yaml` files that contain the parameters for the training. The `spaceenv` parameter is mandatory and it should be the name of the config file without the `.yaml` extension.
+For example, you can use `python train_spaceenv.py spaceenv=elect_dempct_college` to train the `elect_dempct_college` space environment. In general, `<config_file_name>` can be any of the config files in `conf/spaceenv/`. The config files are `.yaml` files that contain the parameters for the training. The `spaceenv` parameter is mandatory and it should be the name of the config file without the `.yaml` extension.
 
-The outputs will be saved in `outputs/<base_name>` where the `base_name` is specified as a mandatory field in the config file. The outputs are:
+The outputs will be saved in `trained_spaceenvs/<spaceenv>`. The outputs are:
  - `synthetic_data.csv`: data frame with all the synthetic and real data 
  - `metadata.yaml`: info about the generated data (column names, features importance, etc.)
  - `leaderboard.csv`: results from `autogluon` fit.
  - `counterfactuals.png` image with generated potential outcome curves, it gives a good idea of the confounding
 
-**⚠️ Note ⚠️**: The recommended pattern is that the name of the config file and basenames are the same when pushing a file to the repository. In the future this may be automatic.
-
 
 ### Uploading
 
-You will need a Harvard Dataverse API token to upload the dataset in the SpaCE collection. Export it as an environment variable as follows:
+You will need a Harvard (or other) Dataverse API token to upload the dataset in the SpaCE collection. Export it as an environment variable as follows:
 
 ```
-export DATAVERSE_TOKEN=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-python upload.py base_name=<base_name>
+export <DATAVERSE_TOKEN>=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxxoad.py spaceenv=<spaceenv> dataverse=<dataverse>
 ```
 
-Use the flag `debug=true` for debugging without uploading the dataset.
+Each dataverse destination can have a different token. These name of the token is specified at `conf/dataverse/<dataverse>.yaml` under the field token (e.g. token=HARVARD_DATAVERSE_TOKEN).
+
+Use the flag `upload=false` to avoid uploading the dataset. The upload script will still prepare the directory and zip file for upload under `uploads/<spaceenv>`. This is useful for testing the pipeline or run things locally with new collections and environments.
 
 
 ## List of available Space Envs

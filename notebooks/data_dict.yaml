@@ -1,0 +1,316 @@
+broadband_econ_zcta:
+  data_path: data_collections/broadband_econ_zcta/data.parquet
+  graph_path: data_collections/broadband_econ_zcta/graph.graphml.gz
+  overview:
+    Description: >
+      This data contains broadband usage information at the ZCTA (zipcode) level from
+      Microsoft's [USBroadband Dataset](https://github.com/microsoft/USBroadbandUsagePercentages)
+      at the zip code (ZCTA) level for the year 2020. Data from the 2020 Census is used
+      to provide demographic and socioeconomic information at the ZCTA level.
+    Spatial Coverage: US
+    Spatial Resolution: zcta
+    Temporal Coverage: 2020
+    Temporal Resolution: annual
+    Original Data Sources: 
+      - https://github.com/microsoft/USBroadbandUsagePercentages
+      - https://www.census.gov/
+    Data Processing Code: notebooks/105_broadband.ipynb
+    Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+  var_list:
+    ALAND20: Land area (square meters) (TIGERLINE)
+    AWATER20: Water area (square meters) (TIGERLINE)
+    total_population: Total population (Census)
+    white: White population  (Census)
+    median_household_income: Median household income (Census)
+    highschool_graduates: High school graduates (Census)
+    total_population_over_18: Total population over 18 (Census)
+    unemployed_population_16_over: Unemployed population over 16 (Census)
+    owner_occupied_housing_units: Owner occupied housing units (Census)
+    renter_occupied_housing_units: Renter occupied housing units (Census)
+    age_under_5: Population under 5 (Census)
+    age_5_9: Population 5-9 (Census)
+    age_10_14: Population 10-14 (Census)
+    age_15_19: Population 15-19 (Census)
+    age_20_24: Population 20-24 (Census)
+    population_below_poverty_level: Population below poverty level (Census)
+    pct_highschool_graduates: Percent high school graduates (Census, Processed)
+    log_median_income: Log median income (Census, Processed)
+    log_total_population: Log total population (Census, Processed)
+    pct_white: Percent white (Census, Processed)
+    pct_black: Percent black (Census, Processed)
+    pct_asian: Percent asian (Census, Processed)
+    pct_poverty: Percent below poverty level (Census, Processed)
+    pct_age_under_5: Percent population under 5 (Census, Processed)
+    pct_age_5_9: Percent population 5-9 (Census, Processed)
+    pct_age_10_14: Percent population 10-14 (Census, Processed)
+    pct_age_15_19: Percent population 15-19 (Census, Processed)
+    pct_age_20_24: Percent population 20-24 (Census, Processed)
+    pop_dens: Population density (Census, Processed)
+    BROADBAND USAGE PERCENTAGE: Broadband usage percentage (Microsoft)
+
+pm25_comps_hires_grid:
+  graph_path: data_collections/pm25_comps_hires_grid/graph.tar.gz
+  data_path: data_collections/pm25_comps_hires_grid/data.parquet
+  overview: 
+    "Description": > 
+      The data is sourced at high spatial resolution of 1km x 1km. 
+      After merging multiple sources and removing missing values, the dataset contains around 5,000,000 observations.
+      This dataset contains estimates of PM2.5 and of PM2.5 components for the contiguous United States at 1km resolution. 
+      The components are: EC (Elemental Carbon), NH4 (Ammonium), NO3 (Nitrate), OC (Organic Carbon), and SO4(Sulfate). 
+      The values are for the 2000 year. 
+    "Spatial Coverage": Contiguous USA
+    "Spatial Resolution": 1km x 1km
+    "Temporal Coverage": 2000
+    "Temporal Resolution": annual
+    "Original Data Sources": 
+      - https://sedac.ciesin.columbia.edu/data/set/aqdh-pm2-5-component-ec-nh4-no3-oc-so4-50m-1km-contiguous-us-2000-2019/data-download
+      - https://sedac.ciesin.columbia.edu/data/set/aqdh-pm2-5-annual-concentrations-1km-contiguous-us-2000-2019/data-download
+    "Data Processing Code": notebooks/106_pm25comps.ipynb
+    "Data Location": https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+
+  var_list:
+    value_pm25: PM2.5 1km x 1km estimates
+    value_ec: Elemental Carbon 1km x 1km estimates
+    value_so4: Sulfate 1km x 1km estimates
+    value_no3: Nitrate 1km x 1km estimates
+    value_nh4: Ammonium 1km x 1km estimates
+    value_oc: Organic Carbon 1km x 1km estimates
+
+cdc_atsdr_svi_tx:
+  graph_path: data_collections/cdc_atsdr_svi_tx/graph.graphml
+  data_path: data_collections/cdc_atsdr_svi_tx/data.tab
+  overview:
+    Description: >-
+      A subset of the Social Vulnerability Index data provided by the CDC/ATSDR. 
+      The index represents the potential adverse impacts on communities due to 
+      external strains on human health, such as natural disasters, human-induced 
+      catastrophes, or disease outbreaks.
+    Spatial Coverage: Texas
+    Spatial Resolution: census tract
+    Temporal Coverage: 2020
+    Temporal Resolution: annual
+    Original Data Sources: https://www.atsdr.cdc.gov/placeandhealth/svi/data_documentation_download.html
+    Data Processing Code: "notebooks/102_cdc_atsdr_svi.ipynb"
+    Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+  var_list:
+    FIPS: >-
+      Federal Information Processing Standard state code. This is a unique 
+      identifier for geographic regions in the United States, often used in data 
+      collection and analysis.
+    E_TOTPOP: The estimated total population of the geographical region.
+    E_HU: The estimated total number of housing units in the area.
+    E_HH: The estimated number of households in the area.
+    EP_MUNIT: The estimated percentage of housing units in a multi-unit structure.
+    EP_NOINT: The estimated percentage of households without an internet subscription.
+    EP_POV150: The estimated percentage of the population living at 150% of the poverty level or below.
+    EP_UNEMP: The estimated percentage of the labor force that is unemployed.
+    EP_HBURD: >-
+      The estimated percentage of households with housing cost burdens 
+      (defined as spending more than 30% of income on housing).
+    EP_NOHSDP: >-
+      The estimated percentage of the population aged 25 or older without a 
+      high school diploma or equivalent.
+    EP_UNINSUR: The estimated percentage of the population without health insurance.
+    EP_AGE65: The estimated percentage of the population aged 65 or older.
+    EP_AGE17: The estimated percentage of the population aged 17 or younger.
+    EP_DISABL: The estimated percentage of the population with a disability.
+    EP_SNGPNT: The estimated percentage of single-parent households.
+    EP_LIMENG: The estimated percentage of the population with limited English proficiency.
+    EP_MINRTY: The estimated percentage of the population identified as a racial or ethnic minority.
+    EP_NOVEH: The estimated percentage of households with no vehicle available.
+    RPL_THEME1: Percentile ranking for Socioeconomic Status theme summary.
+    RPL_THEME2: Percentile ranking for Household Characteristics theme summary.
+    RPL_THEME3: Percentile ranking for Racial and Ethnic Minority Status theme.
+    RPL_THEME4: Percentile ranking for Housing Type/ Transportation theme.
+    RPL_THEMES: Overall percentile ranking.
+
+climate_exposure_ca:
+  graph_path: data_collections/climate_exposure_ca/graph.graphml
+  data_path: data_collections/climate_exposure_ca/data.tab
+  overview:
+    Description: >-
+      This dataset includes information about the average weather and climate 
+      conditions during the summer months of 2020. It covers factors like 
+      temperature, wildfire smoke, wind speed, and relative humidity, sourced 
+      from PRISM and NOAA, and population density aggregated at the census tract 
+      level.
+    Spatial Coverage: California
+    Spatial Resolution: census tract
+    Temporal Coverage: 2020
+    Temporal Resolution: annual
+    Original Data Sources: >-
+      https://prism.oregonstate.edu and https://www.ncei.noaa.gov/access/monitoring/wind/
+    Data Processing Code: "notebooks/104_climate_exposure.ipynb"
+    Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+  var_list:
+    GEOID: Unique geographic identifier of the area.
+    POPULATION_2020: Total population of the area in 2020.
+    POP20_SQMI: Population density per square mile in 2020.
+    avg_temp_jun: Average temperature in the area for the month of June.
+    avg_temp_jul: Average temperature in the area for the month of July.
+    avg_temp_aug: Average temperature in the area for the month of August.
+    avg_temp_sep: Average temperature in the area for the month of September.
+    avg_temp_oct: Average temperature in the area for the month of October.
+    avg_rhum_jun: Average relative humidity in the area for the month of June.
+    avg_rhum_jul: Average relative humidity in the area for the month of July.
+    avg_rhum_aug: Average relative humidity in the area for the month of August.
+    avg_rhum_sep: Average relative humidity in the area for the month of September.
+    avg_rhum_oct: Average relative humidity in the area for the month of October.
+    avg_wnd_jun: Average wind speed in the area for the month of June.
+    avg_wnd_jul: Average wind speed in the area for the month of July.
+    avg_wnd_aug: Average wind speed in the area for the month of August.
+    avg_wnd_sep: Average wind speed in the area for the month of September.
+    avg_wnd_oct: Average wind speed in the area for the month of October.
+    avg_smoke_pm_jun: Average particulate matter from smoke in the area for the month of June.
+    avg_smoke_pm_jul: Average particulate matter from smoke in the area for the month of July.
+    avg_smoke_pm_aug: Average particulate matter from smoke in the area for the month of August.
+    avg_smoke_pm_sep: Average particulate matter from smoke in the area for the month of September.
+    avg_smoke_pm_oct: Average particulate matter from smoke in the area for the month of October.
+    EP_AGE17: The estimated percentage of the population aged 17 or younger.
+    EP_AGE65: The estimated percentage of the population aged 65 or older.
+    EP_NOINT: The estimated percentage of households without an internet subscription.
+    EP_POV150: The estimated percentage of the population living at 150% of the poverty level or below.
+    EP_UNEMP: The estimated percentage of the labor force that is unemployed.
+    EP_MINRTY: The estimated percentage of the population identified as a racial or ethnic minority.
+    EP_LIMENG: The estimated percentage of the population with limited English proficiency.
+    EP_UNINSUR: The estimated percentage of the population without health insurance.
+    RPL_THEMES: Overall percentile ranking.
+
+air_pollution_mortality_us:
+  graph_path: data_collections/air_pollution_mortality_us/graph.graphml
+  data_path: data_collections/air_pollution_mortality_us/data.tab
+  overview:
+    Description: >-
+      The dataset incorporates all-cause mortality data sourced from the CDC,
+      along with a range of demographic and environmental variables, including data
+      on temperature and air pollution, all pertaining to the year 2010.
+    Spatial Coverage: Continental USA
+    Spatial Resolution: county
+    Temporal Coverage: 2010
+    Temporal Resolution: annual
+    Original Data Sources: >-
+      https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/L7YF2G
+      and https://wonder.cdc.gov/controller/datarequest/D77
+    Data Processing Code: 'notebooks/103_air_pollution.ipynb'
+    Data Location: >-
+      https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+  var_list:
+    qd_mean_pm25: >-
+      Mean PM2.5 air pollution level. PM2.5 refers to atmospheric particulate
+      matter with a diameter of less than 2.5 micrometers.
+    cs_poverty: Count or percentage of individuals living in poverty.
+    cs_hispanic: Population count identifying as Hispanic.
+    cs_black: Population count identifying as Black.
+    cs_white: Population count identifying as White.
+    cs_native: Population count identifying as Native American.
+    cs_asian: Population count identifying as Asian.
+    cs_ed_below_highschool: Population count with an educational attainment level below high school.
+    cs_household_income: Average household income in the area.
+    cs_median_house_value: Median value of houses in the area.
+    cs_other: Population count identifying as other than the specified races.
+    cs_population_density: Population density in the area (population per square mile).
+    cdc_mean_bmi: Mean body mass index (BMI) as recorded by the Centers for Disease Control and Prevention.
+    cdc_pct_cusmoker: Percentage of current smokers as recorded by the CDC.
+    cdc_pct_sdsmoker: Percentage of individuals who smoke some days as recorded by the CDC.
+    cdc_pct_fmsmoker: Percentage of individuals who smoke every day as recorded by the CDC.
+    cdc_pct_nvsmoker: Percentage of individuals who never smoked as recorded by the CDC.
+    cdc_pct_nnsmoker: Percentage of individuals who do not smoke now as recorded by the CDC.
+    gmet_mean_tmmn: Mean minimum temperature as recorded by Global Meteorological data.
+    gmet_mean_summer_tmmn: Mean minimum temperature during summer as recorded by Global Meteorological data.
+    gmet_mean_winter_tmmn: Mean minimum temperature during winter as recorded by Global Meteorological data.
+    gmet_mean_tmmx: Mean maximum temperature as recorded by Global Meteorological data.
+    gmet_mean_summer_tmmx: Mean maximum temperature during summer as recorded by Global Meteorological data.
+    gmet_mean_winter_tmmx: Mean maximum temperature during winter as recorded by Global Meteorological data.
+    gmet_mean_rmn: Mean minimum rainfall as recorded by Global Meteorological data.
+    gmet_mean_summer_rmn: Mean minimum rainfall during summer as recorded by Global Meteorological data.
+    gmet_mean_winter_rmn: Mean minimum rainfall during winter as recorded by Global Meteorological data.
+    gmet_mean_rmx: Mean maximum rainfall as recorded by Global Meteorological data.
+    gmet_mean_summer_rmx: Mean maximum rainfall during summer as recorded by Global Meteorological data.
+    gmet_mean_winter_rmx: Mean maximum rainfall during winter as recorded by Global Meteorological data.
+    gmet_mean_sph: Mean specific humidity as recorded by Global Meteorological data.
+    gmet_mean_summer_sph: Mean specific humidity during summer as recorded by Global Meteorological data.
+    gmet_mean_winter_sph: Mean specific humidity during winter as recorded by Global Meteorological data.
+    cms_mortality_pct: Percentage of mortality as recorded by the Centers for Medicare & Medicaid Services.
+    cms_white_pct: Percentage of white individuals as recorded by the Centers for Medicare & Medicaid Services.
+    cms_black_pct: Percentage of black individuals as recorded by the Centers for Medicare & Medicaid Services.
+    cms_others_pct: Percentage of individuals identifying as other races as recorded by the Centers for Medicare & Medicaid Services.
+    cms_hispanic_pct: Percentage of individuals identifying as Hispanic as recorded by the Centers for Medicare & Medicaid Services.
+    cms_female_pct: Percentage of female individuals as recorded by the Centers for Medicare & Medicaid Services.
+    Notes: Additional notes or comments related to the data.
+    County: Name of the county.
+    Deaths: Total number of deaths in the area as recorded by the CDC.
+    Population: Total population of the area.
+    Crude Rate: Crude death rate in the area.
+    cdc_mortality_pct: Percentage of deaths as recorded by the Centers for Disease Control and Prevention.
+    bin_NORTHEAST: Binary variable indicating whether the location is in the Northeast region of the United States.
+    bin_SOUTH: Binary variable indicating whether the location is in the Southern region of the United States.
+    bin_WEST: Binary variable indicating whether the location is in the Western region of the United States.
+
+corr_election_us:
+  graph_path: data_collections/corr_election_us/graph.graphml
+  data_path: data_collections/corr_election_us/data.tab
+  overview:
+    Description: >-
+      The dataset includes election outcomes, specifically the percentage of the population in each county that
+      voted for the Democratic Party in 2020. It also contains various aggregated data, such as demographics and 
+      employment statistics, from 2019 and 2020.
+    Spatial Coverage: Continental USA
+    Spatial Resolution: county
+    Temporal Coverage: 2019 and 2020
+    Temporal Resolution: annual
+    Original Data Sources: https://github.com/evangambit/JsonOfCounties
+    Data Processing Code: 'notebooks/101_election_data.ipynb'
+    Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
+  var_list:
+    fips: >-
+      Federal Information Processing Standard code, a unique identifier for counties and county equivalents 
+      in the United States.
+    noaa_prcp: Average precipitation recorded by the National Oceanic and Atmospheric Administration.
+    noaa_snow: Average snowfall recorded by the National Oceanic and Atmospheric Administration.
+    noaa_temp: Average temperature recorded by the National Oceanic and Atmospheric Administration.
+    noaa_altitude: Altitude of the location as recorded by the National Oceanic and Atmospheric Administration.
+    noaa_temp_jan: Average temperature in January as recorded by the National Oceanic and Atmospheric Administration.
+    noaa_temp_apr: Average temperature in April as recorded by the National Oceanic and Atmospheric Administration.
+    noaa_temp_jul: Average temperature in July as recorded by the National Oceanic and Atmospheric Administration.
+    noaa_temp_oct: Average temperature in October as recorded by the National Oceanic and Atmospheric Administration.
+    cs_male: Male population count.
+    cs_female: Female population count.
+    population/2019: Total population of the area in 2019.
+    cdc_suicides: Number of suicide cases as recorded by the Centers for Disease Control and Prevention.
+    cdc_homicides: Number of homicide cases as recorded by the Centers for Disease Control and Prevention.
+    cdc_vehicle_deaths: Number of vehicle-related death cases as recorded by the Centers for Disease Control and Prevention.
+    bls_labor_force: Total labor force count as recorded by the Bureau of Labor Statistics.
+    bls_employed: Number of employed people as recorded by the Bureau of Labor Statistics.
+    bls_unemployed: Number of unemployed people as recorded by the Bureau of Labor Statistics.
+    life-expectancy: Average life expectancy of individuals in the area.
+    cdc_police_deaths_total: Total number of deaths caused by police as recorded by the Centers for Disease Control and Prevention.
+    cdc_police_deaths_unarmed: >-
+      Number of deaths of unarmed individuals caused by police as recorded by the Centers for Disease 
+      Control and Prevention.
+    police_deaths: Total number of police deaths in the area.
+    avg_income: Average income of individuals in the area.
+    cs_ed_below_highschool: Population count with an educational attainment level below high school.
+    cs_ed_highschool: Population count with high school as their highest educational attainment level.
+    cs_ed_some_college: Population count with some college education but without a degree.
+    cs_ed_above_college: Population count with an educational attainment level above college.
+    poverty-rate: Poverty rate in the area.
+    bls_living_wage: Living wage as defined by the Bureau of Labor Statistics.
+    bls_food_costs: Average food cost as defined by the Bureau of Labor Statistics.
+    bls_medical_costs: Average medical cost as defined by the Bureau of Labor Statistics.
+    bls_housing_costs: Average housing cost as defined by the Bureau of Labor Statistics.
+    bls_tax_costs: Average tax cost as defined by the Bureau of Labor Statistics.
+    health_poor_health_pct: Percentage of population reporting poor health.
+    health_smokers_pct: Percentage of population that are smokers.
+    health_obese_pct: Percentage of population that are obese.
+    health_phy_inactive_pct: Percentage of population that are physically inactive.
+    health_children_poverty_pct: Percentage of children living in poverty.
+    health_80th_perc_income_pct: Income at the 80th percentile.
+    health_20th_perc_income_pct: Income at the 20th percentile.
+    cs_age-to-25: Population count under the age of 25.
+    cs_age-25-65: Population count between the ages of 25 and 65.
+    cs_age-over-65: Population count over the age of 65.
+    cs_white: Population count identifying as White.
+    cs_black: Population count identifying as Black.
+    cs_asian: Population count identifying as Asian.
+    cs_hispanic: Population count identifying as Hispanic.
+    election_dem_pct: Percentage of votes received by the Democratic party in the last election.

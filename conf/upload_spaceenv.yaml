@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+  - dataverse: demo
+  - spaceenv: ???
+
+base_name: ${hydra:runtime.choices.spaceenv}
+upload: true  # when debug is true, the script will not upload to dataverse
+publish: false  # when publish is true, the script will publish the dataset
+token: null  # if upload true it needs to be provided
+
+hydra:
+  run:
+    dir: uploads/${base_name}
+  job:
+    chdir: true

@@ -1,0 +1,15 @@
+defaults:
+  - _self_
+  - dataverse: harvard
+  - collection: ???
+
+collection:
+  base_name:  ${hydra:runtime.choices.collection}
+  graph: ???
+  data: ???
+
+hydra:
+  run:
+    dir: data_collections/${collection.base_name}
+  job:
+    chdir: true

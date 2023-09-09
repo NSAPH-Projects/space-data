@@ -7,15 +7,10 @@ WORKDIR /app
 # install gcc and python3-dev
 RUN apt-get update && apt-get install -y gcc python3-dev
 
-# copy the requirements file
+# install requirements
+RUN conda install -c conda-forge mamba
 COPY requirements.yaml requirements.yaml
+RUN mamba env update -n base -f requirements.yaml
 
-# install dependencies
-RUN conda env create -f requirements.yaml
-
-# maek default conda env
-RUN echo "export CONDA_DEFAULT_ENV=spacedata" >> ~/.bashrc
-RUN echo "export PATH=/opt/conda/envs/spacedata/bin:\$PATH" >> ~/.bashrc
-
-# Make RUN commands use the new environment:
-SHELL ["conda", "run", "-n", "spacedata", "/bin/bash", "-c"]
+# there's currently a bug with ray on linux
+RUN pip uninstall -y ray

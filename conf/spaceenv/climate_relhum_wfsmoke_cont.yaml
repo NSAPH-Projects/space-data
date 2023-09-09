@@ -1,16 +1,25 @@
-data_path: data/climate_exposure_ca_2020.tab
-base_name: climate_relhum_wfsmoke_cont 
+collection: climate_exposure_ca
 treatment: avg_rhum_jun 
 outcome: avg_smoke_pm_jun
-graph_path: data/ca_tracts.graphml
 covariates:
-  - avg_tmax_jun
   - avg_tmax_jul
-  - avg_tmax_aug
-  - avg_tmax_sep
-  - avg_tmax_oct
-  - avg_wnd_jun
+  - tmax_other:
+    - avg_tmax_jun
+    - avg_tmax_aug
+    - avg_tmax_sep
+    - avg_tmax_oct
   - avg_wnd_jul
-  - avg_wnd_aug
-  - avg_wnd_sep
-  - avg_wnd_oct
+  - avg_wnd_other:
+    - avg_wnd_jun
+    - avg_wnd_aug
+    - avg_wnd_sep
+    - avg_wnd_oct
+  - POPULATION_2020
+  - poverty:
+    - EP_POV150
+    - EP_UNEMP
+    - EP_UNINSUR
+  - age:
+    - EP_AGE65
+    - EP_AGE17
+  - E_NOINT

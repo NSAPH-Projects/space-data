@@ -1,33 +1,33 @@
-data_path: data/climate_exposure_ca_2020.tab
-base_name: climate_wfsmoke_minrty_disc
+collection: climate_exposure_ca
 treatment: avg_smoke_pm_jul 
 outcome: EP_MINRTY
-graph_path: data/ca_tracts.graphml
 transforms:
   treatment: qbinary(0.5)
-spatial_tuning:  
-     frac: 0.02  # usually this will cover 35% of the nodes for tuning
-     levels: 2
 covariates:
-  - avg_tmax_jun
   - avg_tmax_jul
-  - avg_tmax_aug
-  - avg_tmax_sep
-  - avg_tmax_oct
-  - avg_rhum_jun
+  - tmax_other:
+    - avg_tmax_jun
+    - avg_tmax_aug
+    - avg_tmax_sep
+    - avg_tmax_oct
   - avg_rhum_jul
-  - avg_rhum_aug
-  - avg_rhum_sep
-  - avg_rhum_oct
-  - avg_wnd_jun
+  - rhum_other:
+    - avg_rhum_jun
+    - avg_rhum_aug
+    - avg_rhum_sep
+    - avg_rhum_oct
   - avg_wnd_jul
-  - avg_wnd_aug
-  - avg_wnd_sep
-  - avg_wnd_oct
+  - avg_wnd_other:
+    - avg_wnd_jun
+    - avg_wnd_aug
+    - avg_wnd_sep
+    - avg_wnd_oct
   - POPULATION_2020
-  - EP_POV150
-  - EP_UNEMP
-  - EP_UNINSUR
-  - EP_AGE65
-  - EP_AGE17
+  - poverty:
+    - EP_POV150
+    - EP_UNEMP
+    - EP_UNINSUR
+  - age:
+    - EP_AGE65
+    - EP_AGE17
   - E_NOINT

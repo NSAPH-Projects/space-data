@@ -1,105 +1,17 @@
+import logging
+import os
 import re
+import shutil
+from typing import Literal
+from zipfile import ZipFile
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import os
-import json
-import shutil
-from zipfile import ZipFile
-from typing import Literal
 from omegaconf.listconfig import ListConfig
-import logging
-import networkx as nx
 from scipy.linalg import cholesky, solve_triangular
-from pyDataverse.models import Datafile
-from pyDataverse.api import NativeApi, DataAccessApi
-
-LOGGER = logging.getLogger(__name__)
-
-
-def download_dataverse_data(
-    filename: str,
-    dataverse_baseurl: str,
-    dataverse_pid: str,
-    output_dir: str = ".",
-):
-    api = NativeApi(dataverse_baseurl)
-    data_api = DataAccessApi(dataverse_baseurl)
-    dataset = api.get_dataset(dataverse_pid)
-    files_list = dataset.json()["data"]["latestVersion"]["files"]
-    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
-
-    if filename not in file2id:
-        raise ValueError(f"File {filename} not found in dataverse.")
-    else:
-        response = data_api.get_datafile(file2id[filename])
-        with open(f"{output_dir}/{filename}", "wb") as f:
-            f.write(response.content)
-
-
-def upload_dataverse_data(
-    data_path: str,
-    data_description: str,
-    dataverse_baseurl: str,
-    dataverse_pid: str,
-    dataverse_token: str,
-    dataset_publish: bool = False,
-    debug: bool = False,
-):
-    """
-    Upload data to the collection
-    Args:
-        file_path (str): Filename
-        description (str): Data file description.
-        token (str): Dataverse API Token.
-    """
-
-    api = NativeApi(dataverse_baseurl, dataverse_token)
-
-    filename = os.path.basename(data_path)
-
-    
-    
-    dataset = api.get_dataset(dataverse_pid)
-    files_list = dataset.json()["data"]["latestVersion"]["files"]
-    file2id = {f["dataFile"]["filename"]: f["dataFile"]["id"] for f in files_list}
-    filename_ = filename.replace(".zip.zip", ".zip")
-     
-    if filename_ not in file2id:
-        dataverse_datafile = Datafile()
-        dataverse_datafile.set(
-            {
-                "pid": dataverse_pid,
-                "filename": filename,
-                "description": data_description,
-            }
-        )
-        LOGGER.info("File basename: " + filename)
-        
-        resp = api.upload_datafile(dataverse_pid, data_path, dataverse_datafile.json())
-        if resp.json()["status"] == "OK":
-            LOGGER.info("Dataset uploaded.")
-        else:
-            LOGGER.error("Dataset not uploaded.")
-            LOGGER.error(resp.json())
-    else:
-        LOGGER.info("File already exists. Replacing it.")
-        
-        file_id = file2id[filename_]  
-        json_dict = {
-            "description": data_description,
-            "forceReplace": True,
-            "filename": filename,
-            #"label": filename,
-        }
-        json_str = json.dumps(json_dict)
-        resp = api.replace_datafile(file_id, data_path, json_str, is_filepid=False)
-        if resp.json()["status"] == "ERROR":
-            LOGGER.error(f"An error at replacing the file: {resp.content}")
-
-    if dataset_publish:
-        resp = api.publish_dataset(dataverse_pid, release_type="major")
-        if resp.json()["status"] == "OK":
-            LOGGER.info("Dataset published.")
+from scipy.sparse import csc_matrix
+from scipy.sparse.linalg import splu
 
 
 def scale_variable(
@@ -196,9 +108,9 @@ def __find_best_gmrf_params(x: np.ndarray, graph: nx.Graph) -> np.ndarray:
 
     best_lam = min(lams, key=lambda l: losses[l])
 
-    LOGGER.info(f"Best lambda: {best_lam:.4f}")
+    logging.info(f"Best lambda: {best_lam:.4f}")
     losses_ = {np.round(k, 4): np.round(v, 4) for k, v in losses.items()}
-    LOGGER.info(f"Losses: {losses_}")
+    logging.info(f"Losses: {losses_}")
 
     return best_lam
 
@@ -222,58 +134,111 @@ def generate_noise_like_by_penalty(x: pd.Series, graph: nx.Graph) -> np.ndarray:
     return noise
 
 
-def generate_noise_like(x: pd.Series, graph: nx.Graph) -> np.ndarray:
+def generate_noise_like(
+    x: np.ndarray, edge_list: np.ndarray, attempts: int = 10
+) -> np.ndarray:
     """Injects noise into residuals using a Gaussian Markov Random Field."""
-    # find average correlation between a point and its neighbors mean
-    nbrs2ix = {n: i for i, n in enumerate(x.index)}
-    nbrs = [[nbrs2ix[i] for i in nx.neighbors(graph, n)] for n in x.index]
-    x_ = x.values
-    nbr_means = np.array([np.nanmean(x_[nbrs[i]]) for i in range(len(x))])
-    x__ = (x_ - np.nanmean(x_)) / np.nanstd(x_)
-    nbr_means_ = (nbr_means - np.nanmean(nbr_means)) / np.nanstd(nbr_means)
-    corr = np.nansum(x__ * nbr_means_) / len(x)
+    n = len(x)
+    nbrs_means = get_nbrs_means(x, edge_list)
+    rho = get_nbrs_corr(x, edge_list, nbrs_means=nbrs_means)
 
-    # scaled graph laplacian
-    Q = nx.laplacian_matrix(graph).toarray() / np.mean([len(n) for n in nbrs])
+    # 1. Build precision matrix
+    # Arrays to hold the data, row indices, and column indices for Q
+    data = []
+    rows = []
+    cols = []
 
-    # add variance to diagonal
-    Q = corr * Q + (1 - corr + 1e-4) * np.eye(Q.shape[0])
-    LOGGER.info(f"Residual neighbor correlation: {corr:.4f}")
+    # Off-diagonal entries and compute degree for diagonal
+    degree = np.zeros(n)
+    for i, j in edge_list:
+        data.extend([-rho, -rho])
+        rows.extend([i, j])
+        cols.extend([j, i])
+        degree[i] += 1
+        degree[j] += 1
 
-    # sample from GMRF
-    Z = np.random.randn(Q.shape[0])
-    L = cholesky(Q, lower=True)
-    noise = solve_triangular(L, Z, lower=True).T
+    # Add diagonal entries
+    data.extend(np.maximum(degree, 0.1))
+    rows.extend(range(n))
+    cols.extend(range(n))
+
+    # build precision matrix
+    Q = csc_matrix((data, (rows, cols)), shape=(n, n))
+    factorization = splu(Q)
+
+    best_result = np.inf
+    best_corr = None
+    best_attempt = None
+    for _ in range(attempts):
+        noise = factorization.solve(np.random.normal(size=n))
+        noise_nbrs_means = get_nbrs_means(noise, edge_list)
+        corr = np.corrcoef(noise, noise_nbrs_means)[0, 1]
+        if np.abs(rho - corr) < best_result:
+            best_result = np.abs(rho - corr)
+            best_corr = corr
+            best_attempt = noise
 
     # scale noise to have same variance as residuals
-    noise = noise / noise.std() * np.nanstd(x)
+    noise = best_attempt / best_attempt.std() * np.nanstd(x)
 
     return noise
 
 
-def moran_I(x: pd.Series, A: np.ndarray) -> float:
-    x = x.values
+def get_nbrs_means(x: np.ndarray, edge_list: np.ndarray) -> np.ndarray:
+    """Computes the mean of each node's neighbors."""
+    nbrs = [[] for _ in range(x.shape[0])]
+    for i, j in edge_list:
+        nbrs[i].append(j)
+        nbrs[j].append(i)
 
-    # input the mean of x when there nan values
-    x[np.isnan(x)] = np.nanmean(x)
+    xbar = np.nanmean(x)
+    nbrs_means = np.zeros(len(x))
+    for i in range(len(x)):
+        if not nbrs[i]:
+            nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
+        else:
+            valid = [x_j for x_j in x[nbrs[i]] if not np.isnan(x_j)]
+            if valid:
+                nbrs_means[i] = np.mean(valid)
+            else:
+                nbrs_means[i] = xbar if np.isnan(x[i]) else x[i]
 
-    # Compute mean of attribute values
-    x_bar = np.mean(x)
+    return nbrs_means
+
+
+def get_nbrs_corr(
+    x: np.ndarray, edge_list: np.ndarray, nbrs_means: np.ndarray | None = None
+) -> float:
+    """Computes the correlation between each node and its neighbors."""
+    if nbrs_means is None:
+        nbrs_means = get_nbrs_means(x, edge_list)
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
+    rho = np.corrcoef(x_, nbrs_means)[0, 1]
+    return float(rho)
+
+
+def moran_I(x: np.ndarray, edge_list: np.ndarray) -> float:
+    x = x.copy()
+
+    xbar = np.nanmean(x)
+    nbrs_means = get_nbrs_means(x, edge_list)
+
+    x_ = x.copy()
+    x_[np.isnan(x_)] = nbrs_means[np.isnan(x_)]
 
     # Subtract mean from attribute values
-    x_diff = x - x_bar
-
-    # Compute denominator: sum of squared differences from mean
-    denominator = np.sum(x_diff**2) + 1e-8
+    x_diff = x_ - xbar
 
     # Compute numerator: sum of product of weight and pair differences from mean
-    # Matrix multiplication to achieve vectorization
-    numerator = np.sum(A * np.outer(x_diff, x_diff))
+    src_diff = x_diff[edge_list[:, 0]]
+    dst_diff = x_diff[edge_list[:, 1]]
+    numerator = np.sum(src_diff * dst_diff) * len(x_diff)
 
-    # Compute Moran's I
-    I = len(x) / np.sum(A) * (numerator / denominator)
+    # Compute denominator: sum of squared differences from mean
+    denominator = np.sum(x_diff**2) * len(edge_list)
 
-    return float(I)
+    return float(numerator / denominator)
 
 
 def double_zip_folder(folder_path, output_path):
@@ -295,3 +260,53 @@ def sort_dict(d: dict) -> dict[str, float]:
     return {
         str(k): float(v) for k, v in sorted(d.items(), key=lambda x: x[1], reverse=True)
     }
+
+
+def spatial_train_test_split(
+    graph: nx.Graph, init_frac: float, levels: int, buffer: int
+):
+    logging.info(f"Selecting tunning split removing {levels} nbrs from val. pts.")
+
+    # make dict of neighbors from graph
+    node_list = np.array(graph.nodes())
+    n = len(node_list)
+    nbrs = {node: set(graph.neighbors(node)) for node in node_list}
+
+    # first find the centroid of the tuning subgraph
+    num_tuning_centroids = int(init_frac * n)
+    tuning_nodes = np.random.choice(n, size=num_tuning_centroids, replace=False)
+    tuning_nodes = set(node_list[tuning_nodes])
+
+    # not remove all neighbors of the tuning centroids from the training data
+    for _ in range(levels):
+        tmp = tuning_nodes.copy()
+        for node in tmp:
+            for nbr in nbrs[node]:
+                tuning_nodes.add(nbr)
+    tuning_nodes = list(tuning_nodes)
+
+    # buffer
+    buffer_nodes = set(tuning_nodes.copy())
+    for _ in range(buffer):
+        tmp = buffer_nodes.copy()
+        for node in tmp:
+            for nbr in nbrs[node]:
+                buffer_nodes.add(nbr)
+    buffer_nodes = list(set(buffer_nodes))
+
+    return tuning_nodes, buffer_nodes
+
+
+def unpack_covariates(groups: dict) -> list[str]:
+    covariates = []
+    for c in groups:
+        if isinstance(c, dict) and len(c) == 1:
+            covariates.extend(next(iter(c.values())))
+        elif isinstance(c, str):
+            covariates.append(c)
+        else:
+            msg = "covar group must me dict with a single element or str"
+            logging.error(msg)
+            raise ValueError(msg)
+
+    return covariates
