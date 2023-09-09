@@ -140,7 +140,7 @@ climate_exposure_ca:
     Temporal Resolution: annual
     Original Data Sources: >-
       https://prism.oregonstate.edu and https://www.ncei.noaa.gov/access/monitoring/wind/
-    Data Processing Code: "`notebooks/104_climate_exposure.ipynb`"
+    Data Processing Code: "notebooks/104_climate_exposure.ipynb"
     Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
   var_list:
     GEOID: Unique geographic identifier of the area.
@@ -191,7 +191,7 @@ air_pollution_mortality_us:
     Original Data Sources: >-
       https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/L7YF2G
       and https://wonder.cdc.gov/controller/datarequest/D77
-    Data Processing Code: '`notebooks/103_air_pollution.ipynb`'
+    Data Processing Code: 'notebooks/103_air_pollution.ipynb'
     Data Location: >-
       https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
   var_list:
@@ -259,7 +259,7 @@ corr_election_us:
     Temporal Coverage: 2019 and 2020
     Temporal Resolution: annual
     Original Data Sources: https://github.com/evangambit/JsonOfCounties
-    Data Processing Code: '`notebooks/101_election_data.ipynb`'
+    Data Processing Code: 'notebooks/101_election_data.ipynb'
     Data Location: https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/SYNPBS
   var_list:
     fips: >-
