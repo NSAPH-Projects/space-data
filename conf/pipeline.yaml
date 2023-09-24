@@ -1,17 +1,22 @@
 upload_dataverse: demo
 download_dataverse: harvard
-upload: false
+upload: true
 token: null
 training_threads: 4
 spaceenvs:
-  - climate_relhum_wfsmoke_cont
-  - climate_wfsmoke_minrty_disc
-  - healthd_dmgrcs_mortality_disc
-  - healthd_hhinco_mortality_cont
+  # - climate_relhum_wfsmoke_cont
+  # - climate_wfsmoke_minrty_disc
+  # - healthd_dmgrcs_mortality_disc
+  # - healthd_hhinco_mortality_cont
   - healthd_pollutn_mortality_cont
-  - county_educatn_election_cont
-  - county_phyactiv_lifexpcy_cont
-  - county_dmgrcs_election_disc
-  - cdcsvi_limteng_hburdic_cont
-  - cdcsvi_nohsdp_poverty_cont
-  - cdcsvi_nohsdp_poverty_disc
+  # - county_educatn_election_cont
+  # - county_phyactiv_lifexpcy_cont
+  # - county_dmgrcs_election_disc
+  # - cdcsvi_limteng_hburdic_cont
+  # - cdcsvi_nohsdp_poverty_cont
+  # - cdcsvi_nohsdp_poverty_disc
+  # - zcta_income_broadband_cont
+  # - zcta_age_broadband_cont
+  - zcta_income_broadband_disc
+  # - pm25_hires_no3_pm_cont  # the next two require to run with more more memory
+  # - pm25_hires_so4_pm_cont 

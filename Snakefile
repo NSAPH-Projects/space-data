@@ -6,7 +6,6 @@ singularity: "docker://mauriciogtec/spacedata:multi"
 
 conda: "requirements.yaml"
 
-
 # == Load configs ==
 if len(config) == 0:
     raise Exception(
@@ -26,6 +25,12 @@ spaceenv_parent = {}
 for e in pipeline_cfg.spaceenvs:
     cfg = OmegaConf.load(f"conf/spaceenv/{e}.yaml")
     spaceenv_parent[e] = cfg.collection
+
+data_collection_data_file_ext = {}
+unique_collections = set(spaceenv_parent.values())
+for c in unique_collections:
+    cfg = OmegaConf.load(f"conf/collection/{c}.yaml")
+    data_collection_data_file_ext[c] = cfg.data.split(".")[-1]
 
 
 # == Identify all spaceenvs that required uploading ==
@@ -51,12 +56,14 @@ rule all:
 
 rule download_data_collection:
     output:
-        "data_collections/{collection}/data.tab",
-        "data_collections/{collection}/graph.graphml",
+        "data_collections/{collection}/data.{ext}",
     log:
-        err="data_collections/{collection}/download_collection.log",
+        err="data_collections/{collection}/download_collection-{ext}.err",
     params:
         dataverse=pipeline_cfg.download_dataverse,
+    resources:
+        mem_mb=20000,
+        disk_mb=20000
     shell:
         """
         python download_collection.py \
@@ -66,45 +73,48 @@ rule download_data_collection:
         """
 
 
-def spaceenv_inputs(wildcards):
+def train_spaceenv_inputs(wildcards):
     collection = spaceenv_parent[wildcards.spaceenv]
-    return [
-        f"data_collections/{collection}/data.tab",
-        f"data_collections/{collection}/graph.graphml",
-    ]
+    ext = data_collection_data_file_ext[collection]
+    return f"data_collections/{collection}/data.{ext}"
 
 
 rule train_spaceenv:
     input:
-        spaceenv_inputs,
+        train_spaceenv_inputs,
     output:
-        "trained_spaceenvs/{spaceenv}/graph.graphml",
-        "trained_spaceenvs/{spaceenv}/metadata.yaml",
-        "trained_spaceenvs/{spaceenv}/synthetic_data.csv",
-        "trained_spaceenvs/{spaceenv}/leaderboard.csv",
+        "trained_spaceenvs/{spaceenv}/synthetic_data.{ext}"
     threads: pipeline_cfg.training_threads
     log:
-        err="trained_spaceenvs/{spaceenv}/error.log",
+        err="trained_spaceenvs/{spaceenv}/error-{ext}.log",
+    resources:
+        mem_mb=20000,
+        disk_mb=20000
     shell:
         """
         python train_spaceenv.py spaceenv={wildcards.spaceenv} 2> {log.err}
         """
 
+def upload_spaceenv_inputs(wildcards):
+    collection = spaceenv_parent[wildcards.spaceenv]
+    ext = data_collection_data_file_ext[collection]
+    return "trained_spaceenvs/{spaceenv}/synthetic_data." + ext
+
 
 rule upload_spaceenv:
     input:
-        "trained_spaceenvs/{spaceenv}/graph.graphml",
-        "trained_spaceenvs/{spaceenv}/metadata.yaml",
-        "trained_spaceenvs/{spaceenv}/synthetic_data.csv",
-        "trained_spaceenvs/{spaceenv}/leaderboard.csv",
+        upload_spaceenv_inputs,
     params:
         upload=pipeline_cfg.upload,
         dataverse=pipeline_cfg.upload_dataverse,
         token=pipeline_cfg.token,
     log:
-        err="uploads/{spaceenv}/upload_spaceenv.log",
+        err="uploads/{spaceenv}/upload_spaceenv.err",
     output:
         "uploads/{spaceenv}/upload_status.txt",
+    resources:
+        mem_mb=20000,
+        disk_mb=20000
     shell:
         """
         python upload_spaceenv.py spaceenv={wildcards.spaceenv} \

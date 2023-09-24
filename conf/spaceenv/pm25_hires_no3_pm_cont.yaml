@@ -1,5 +1,5 @@
 collection: pm25_comps_hires_grid
-treatment: value_so4
+treatment: value_no3
 outcome: value_pm25
 treatment_max_bins: 10  # reduce resolution because of large data size
 autogluon:
