@@ -26,30 +26,33 @@ spaceenv:
   bsplines: false  # for continuous treatments only
   bsplines_degree: 3
   bsplines_df: 5
-  binary_treatment_iteractions: false  # add interaction columns for binary treatments
+  binary_treatment_iteractions: true  # add interaction columns for binary treatments
 
   seed: 42
 
   autogluon:
     fit:
-      presets: medium_quality
-      time_limit: 1800  # in seconds, null means no limit
+      presets: good_quality
+      time_limit: 900  # in seconds, null means no limit
                         # this paremeter can be overriden in the
                         # config of each spaceenv for complex envs.
                         # similarly with the time limits below, presets
                         # and hyperparmeters
-      hyperparameters: null
     leave_out_fit:  # used for confounding scores
-      presets: medium_quality
-      time_limit: 1800
-      hyperparameters: null
+      presets: good_quality
+      time_limit: 900
     feat_importance:
-      time_limit: 1800
+      time_limit: 900
 
   spatial_tuning:  
-    init_frac: 0.05  # usually 35-50% train with 2 levels/buffer
-    levels: 1
-    buffer: 1
+    init_frac: 0.03  # usually 50-70% train with 2=levels+buffer
+    levels: 1  # number of neighbors of tune points to include
+    buffer: 1  # distance in levels to include around tune points
+
+  treatment_quantile_valid_range: [0.025, 0.975]
+  outcome_quantile_valid_range: [0.01, 0.99]
+
+  ensemble_models: ["FASTAI", "CAT", "NN_TORCH", "XGB"]
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number

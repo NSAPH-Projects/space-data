@@ -31,6 +31,9 @@ def main(cfg: DictConfig):
     # this is convenient since autogluon saves the intermediate
     # models on the working directory without obvious way to change it
 
+    # == models to train, autogluon expects a dict from name to empty dict == 
+    hpars = {m: {} for m in spaceenv.ensemble_models}
+
     # === Data preparation ===
     # set seed
     seed_everything(spaceenv.seed)
@@ -44,7 +47,7 @@ def main(cfg: DictConfig):
     logging.info(f"Reading data collection from {collection_path}:")
     data_file = glob(f"{collection_path}/data*")[0]
 
-    if data_file.endswith("csv"):
+    if data_file.endswith("tab"):
         df_read_opts = {
             "sep": "\t",
             "index_col": spaceenv.index_col,
@@ -139,7 +142,28 @@ def main(cfg: DictConfig):
         df[spaceenv.treatment] = df[spaceenv.treatment].astype(bool)
         is_binary_treatment = True
     else:
-        is_binary_treatment = False
+        # if not binary, remove bottom and top for stable training
+        if spaceenv.treatment_quantile_valid_range is not None:
+            fmin = 100 * spaceenv.treatment_quantile_valid_range[0]
+            fmax = 100 * (1 - spaceenv.treatment_quantile_valid_range[1])
+            logging.info(
+                f"Removing bottom {fmin:.1f}% and top {fmax:.1f}% of treat. values for stability."
+            )
+            t = df[spaceenv.treatment].values
+            quants = np.nanquantile(t, spaceenv.treatment_quantile_valid_range)
+            df = df[(t >= quants[0]) & (t <= quants[1])]
+            is_binary_treatment = False
+    
+    # also remove extreme values for outcome
+    if spaceenv.outcome_quantile_valid_range is not None:
+        fmin = 100 * spaceenv.outcome_quantile_valid_range[0]
+        fmax = 100 * (1 - spaceenv.outcome_quantile_valid_range[1])
+        logging.info(
+            f"Removing bottom {fmin:.1f}% and top {fmax:.1f}% of outcome values for stability."
+        )
+        y = df[spaceenv.outcome].values
+        quants = np.nanquantile(y, spaceenv.outcome_quantile_valid_range)
+        df = df[(y >= quants[0]) & (y <= quants[1])]
 
     # === Add extra columns / techniques for better causal effect estimation
     # based on increasing attention to the treatment ===
@@ -231,6 +255,7 @@ def main(cfg: DictConfig):
         **training_cfg.fit,
         tuning_data=tuning_data,
         use_bag_holdout=True,
+        hyperparameters=hpars,
     )
     results = predictor.fit_summary()
     logging.info(f"Model fit summary:\n{results['leaderboard']}")
@@ -367,6 +392,7 @@ def main(cfg: DictConfig):
         **training_cfg.fit,
         tuning_data=treat_tuning_data,
         use_bag_holdout=True,
+        hyperparameters=hpars,
     )
     treat_predictor.refit_full()
 
@@ -419,6 +445,7 @@ def main(cfg: DictConfig):
             **spaceenv.autogluon.leave_out_fit,
             tuning_data=tuning_data[cols],
             use_bag_holdout=True,
+            hyperparameters=hpars,
         )
         leave_out_predictor.refit_full()
 
@@ -466,8 +493,8 @@ def main(cfg: DictConfig):
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
 
     # whens saving synthetic data, respect the original data format
-    if data_file.endswith("csv"):
-        dfout.to_csv(f"{output_dir}/synthetic_data.csv")
+    if data_file.endswith("tab"):
+        dfout.to_csv(f"{output_dir}/synthetic_data.tab", sep="\t", index=False)
     elif data_file.endswith("parquet"):
         dfout.to_parquet(f"{output_dir}/synthetic_data.parquet")
 

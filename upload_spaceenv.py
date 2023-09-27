@@ -103,11 +103,28 @@ def main(cfg: DictConfig):
 
     # copy relevant files to working directory
     shutil.copy(f"{train_dir}/metadata.yaml", contents_dir)
-    shutil.copy(f"{train_dir}/synthetic_data.csv", contents_dir)
+    # get ext from filename "{train_dir}/synthetic_data*"
+    files = os.listdir(train_dir)
+    ext = None
+    for f in files:
+        if "synthetic_data" in f:
+            ext = ".".join(f.split(".")[1:])
+            break
+    if ext is None:
+        raise ValueError("Synthetic data not found.")
+    shutil.copy(f"{train_dir}/synthetic_data.{ext}", contents_dir)
     shutil.copy(f"{train_dir}/leaderboard.csv", contents_dir)
     shutil.copy(f"{train_dir}/counterfactuals.png", contents_dir)
     shutil.copy(f"{train_dir}/.hydra/config.yaml", f"{contents_dir}/config.yaml")
-    shutil.copy(f"{train_dir}/graph.graphml", contents_dir)
+    # get ext from filename "{train_dir}/graph*"
+    ext = None
+    for f in files:
+        if "graph" in f:
+            ext = ".".join(f.split(".")[1:])
+            break
+    if ext is None:
+        raise ValueError("Graph not found.")
+    shutil.copy(f"{train_dir}/graph.{ext}", contents_dir)
 
     # compress folder and double zip
     zipfile = double_zip_folder(contents_dir, f"{cfg.base_name}")

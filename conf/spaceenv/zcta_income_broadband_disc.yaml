@@ -1,0 +1,22 @@
+collection: broadband_econ_zcta
+outcome: "BROADBAND USAGE"
+treatment: log_median_income
+transforms:
+  treatment: qbinary(0.5)
+covariates:
+  - race:
+    - pct_white
+    - pct_black
+    - pct_asian
+  - population:
+    - pop_dens
+  - age:
+    - pct_age_under_5
+    - pct_age_5_9
+    - pct_age_10_14
+    - pct_age_15_19
+    - pct_age_20_24
+  - housing:
+    - owner_occupied_housing_units
+    - renter_occupied_housing_units
+treatment_max_bins: 50  # reduce resolution because of large data size
