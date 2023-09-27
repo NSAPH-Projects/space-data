@@ -31,13 +31,8 @@ def main(cfg: DictConfig):
     # this is convenient since autogluon saves the intermediate
     # models on the working directory without obvious way to change it
 
-    # == models to train == 
-    hpars = {
-        "FASTAI": {},
-        "CAT": {},
-        "NN_TORCH": {},
-        "XGB": {},
-    }
+    # == models to train, autogluon expects a dict from name to empty dict == 
+    hpars = {m: {} for m in spaceenv.ensemble_models}
 
     # === Data preparation ===
     # set seed
@@ -158,6 +153,17 @@ def main(cfg: DictConfig):
             quants = np.nanquantile(t, spaceenv.treatment_quantile_valid_range)
             df = df[(t >= quants[0]) & (t <= quants[1])]
             is_binary_treatment = False
+    
+    # also remove extreme values for outcome
+    if spaceenv.outcome_quantile_valid_range is not None:
+        fmin = 100 * spaceenv.outcome_quantile_valid_range[0]
+        fmax = 100 * (1 - spaceenv.outcome_quantile_valid_range[1])
+        logging.info(
+            f"Removing bottom {fmin:.1f}% and top {fmax:.1f}% of outcome values for stability."
+        )
+        y = df[spaceenv.outcome].values
+        quants = np.nanquantile(y, spaceenv.outcome_quantile_valid_range)
+        df = df[(y >= quants[0]) & (y <= quants[1])]
 
     # === Add extra columns / techniques for better causal effect estimation
     # based on increasing attention to the treatment ===
@@ -488,7 +494,7 @@ def main(cfg: DictConfig):
 
     # whens saving synthetic data, respect the original data format
     if data_file.endswith("tab"):
-        dfout.to_csv(f"{output_dir}/synthetic_data.csv")
+        dfout.to_csv(f"{output_dir}/synthetic_data.tab", sep="\t", index=False)
     elif data_file.endswith("parquet"):
         dfout.to_parquet(f"{output_dir}/synthetic_data.parquet")
 

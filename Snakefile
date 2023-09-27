@@ -88,8 +88,8 @@ rule train_spaceenv:
     log:
         err="trained_spaceenvs/{spaceenv}/error-{ext}.log",
     resources:
-        mem_mb=20000,
-        disk_mb=20000
+        mem_mb=60000,
+        disk_mb=60000
     shell:
         """
         python train_spaceenv.py spaceenv={wildcards.spaceenv} 2> {log.err}
@@ -113,8 +113,8 @@ rule upload_spaceenv:
     output:
         "uploads/{spaceenv}/upload_status.txt",
     resources:
-        mem_mb=20000,
-        disk_mb=20000
+        mem_mb=10000,
+        disk_mb=10000
     shell:
         """
         python upload_spaceenv.py spaceenv={wildcards.spaceenv} \

@@ -46,10 +46,13 @@ spaceenv:
 
   spatial_tuning:  
     init_frac: 0.03  # usually 50-70% train with 2=levels+buffer
-    levels: 0  # number of neighbors of tune points to include
-    buffer: 2  # distance in levels to include around tune points
+    levels: 1  # number of neighbors of tune points to include
+    buffer: 1  # distance in levels to include around tune points
 
   treatment_quantile_valid_range: [0.025, 0.975]
+  outcome_quantile_valid_range: [0.01, 0.99]
+
+  ensemble_models: ["FASTAI", "CAT", "NN_TORCH", "XGB"]
 
 num_plot_samples: 50
 debug_subsample:  # for quicker debugging set to a small number
