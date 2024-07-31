@@ -494,7 +494,7 @@ def main(cfg: DictConfig):
 
     # whens saving synthetic data, respect the original data format
     if data_file.endswith("tab"):
-        dfout.to_csv(f"{output_dir}/synthetic_data.tab", sep="\t", index=False)
+        dfout.to_csv(f"{output_dir}/synthetic_data.tab", sep="\t", index=True)
     elif data_file.endswith("parquet"):
         dfout.to_parquet(f"{output_dir}/synthetic_data.parquet")
 
