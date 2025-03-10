@@ -1,0 +1,29 @@
+collection: sim_medicare_county
+treatment: pm25
+outcome: sim_outcome
+# could modify these to remove geoids that violate instead of individual points
+treatment_quantile_valid_range: [0, 1]
+outcome_quantile_valid_range: [0, 1]
+st_transform: 
+  do_st_transform: true
+  time_col: year
+covariates:
+  - health:
+      - mean_bmi
+      - smoke_rate
+  - race:
+      - hispanic
+      - pct_blk
+  - socioeconomic:
+      - medhouseholdincome
+      - medianhousevalue
+      - poverty
+      - education
+      - pct_owner_occ
+  - population:
+      - popdensity
+  - weather:
+      - summer_tmmx
+      - winter_tmmx
+      - summer_rmax
+      - winter_rmax

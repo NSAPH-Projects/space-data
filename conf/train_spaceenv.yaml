@@ -4,6 +4,11 @@ defaults:
 
 spaceenv:
   base_name: ${hydra:runtime.choices.spaceenv}
+  st_transform: 
+    do_st_transform: false
+    time_col: null
+    window_size: 10
+    overlap: 3
   covariates: null
   outcome: ???
   treament: ???
