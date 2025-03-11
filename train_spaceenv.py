@@ -253,94 +253,88 @@ def main(cfg: DictConfig):
     # obtain final edge list
     node2ix = {n: i for i, n in enumerate(df.index)}
     edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
-
+    
 
     # performing graph fourier transform, data in spectral domain
+    def apply_gft(df, gft_eigvecs, cols_transform, time_col):
+        """Applies Graph Fourier Transform (GFT) to each time slice."""
+        gft_lst = []
+        # iterate through time slice
+        for t in df.index.get_level_values(time_col).unique():
+            df_t = df[df.index.get_level_values(time_col) == t] # filter df
+            df_gft_t = gft_eigvecs.T @ df_t[cols_transform] # apply gft
+            df_gft_t.index = df_t.index # synchronize index
+            gft_lst.append(df_gft_t)
+        return pd.concat(gft_lst, axis=0).sort_index()
+
+    def apply_window_transform(df, cols_transform, time_col, window, overlap, transform_func):
+        """Applies a windowed transformation (DCT or IDCT) across time."""
+        min_t = df.index.get_level_values(time_col).min()
+        max_t = df.index.get_level_values(time_col).max() + 1
+        window_idx = 0
+        transformed_lst = []
+
+        curr_min, curr_max = min_t, min_t + window
+        while curr_min < max_t:
+            # Filter for time slots within the current window
+            df_window = df[(df.index.get_level_values(time_col) >= curr_min) & 
+                        (df.index.get_level_values(time_col) < curr_max)]
+            # Extra filtering for IDCT
+            if transform_func == idct:
+                df_window = df_window[df_window["window_idx"] == window_idx]
+            
+            # Apply transform to each column
+            df_transformed_w = pd.DataFrame({colnm: transform_func(np.array(df_window[colnm]), norm="ortho", type=2)
+                                            for colnm in cols_transform})
+            df_transformed_w.index = df_window.index
+            df_transformed_w["window_idx"] = window_idx
+            transformed_lst.append(df_transformed_w.sort_index())
+
+            # Update window position
+            if curr_max > max_t:
+                break
+            curr_min = curr_max - overlap
+            curr_max = curr_max - overlap + window
+            window_idx += 1
+
+        if transform_func == idct:
+            return transformed_lst
+        else:
+            return pd.concat(transformed_lst, axis=0).sort_index()
+
+    def apply_igft(df, gft_eigvecs, cols_transform, time_col):
+        """Applies Inverse Graph Fourier Transform (IGFT) to each time slice."""
+        igft_lst = []
+        # iterate through time
+        for t in df.index.get_level_values(time_col).unique():
+            df_t = df[df.index.get_level_values(time_col) == t] # filter time
+            df_igft_t = gft_eigvecs @ df_t[cols_transform] # apply transform
+            df_igft_t.index = df_t.index # sync index
+            igft_lst.append(df_igft_t)
+        return pd.concat(igft_lst, axis=0)
+
+    # --- Main Processing ---
+
     if spaceenv.st_transform:
-        # enforcing same GFT for each year
+        # Enforcing same GFT for each year
         df = df.set_index(["geoid", time_col]).sort_index()
         df_orig = df
         gft_nodelist = df.index.get_level_values("geoid").unique()
         cols_transform = [spaceenv.treatment] + covariates + [spaceenv.outcome]
         _, gft_eigvecs = gft(graph, gft_nodelist)
-        gft_lst = []
 
-        # gft for each t
-        for t in df.index.get_level_values(time_col).unique():
-            df_t = df[df.index.get_level_values(time_col) == t] 
-            df_gft_t = gft_eigvecs.T @ df_t[cols_transform]
-            df_gft_t[time_col] = t
-            df_gft_t.index = df_t.index
-            gft_lst.append(df_gft_t)
-            
-        df = pd.concat(gft_lst, axis=0)
-        df = df.sort_index()
-        
-        # setting up discrete cosine transform
-        min_t = df[time_col].min()
-        max_t = df[time_col].max() + 1
-        dct_lst = []
-        curr_min, curr_max = min_t, min_t + window
-        window_idx = 0
-        # dct on each variable over each time window
-        while curr_min < max_t:
-            df_window = df[(df.index.get_level_values(time_col) >= curr_min) & 
-                               (df.index.get_level_values(time_col) < curr_max)]
-            df_dct_w = pd.DataFrame({colnm: dct(np.array(df_window[colnm]),norm="ortho", type=2) for colnm in cols_transform})
-            df_dct_w.index = df_window.index
-            df_dct_w["window_idx"] = window_idx
-            dct_lst.append(df_dct_w)
-            if curr_max > max_t:
-                break
-            else:
-                tmp_min = curr_max - overlap
-                curr_max = tmp_min + window
-                curr_min = tmp_min
-                window_idx += 1
-        df = pd.concat(dct_lst, axis=0).sort_index()
+        # Apply GFT
+        df = apply_gft(df, gft_eigvecs, cols_transform, time_col)
 
-        # idct
-        idct_lst = []
-        curr_min, curr_max = min_t, min_t + window
-        window_idx = 0
-        while curr_min < max_t:
-            df_window = df[(df.index.get_level_values(time_col) >= curr_min) & 
-                               (df.index.get_level_values(time_col) < curr_max) &
-                               (df["window_idx"] == window_idx)]
-            df_idct_w = pd.DataFrame({colnm: idct(np.array(df_window[colnm]), norm="ortho", type=2) for colnm in cols_transform})
-            df_idct_w["window_idx"] = window_idx
-            df_idct_w.index = df_window.index
-            idct_lst.append(df_idct_w)
-            if curr_max > max_t:
-                break
-            else:
-                tmp_min = curr_max - overlap
-                curr_max = tmp_min + window
-                curr_min = tmp_min
-                window_idx += 1
-        #df = pd.concat(idct_lst, axis=0).sort_index()
+        # Apply Discrete Cosine Transform (DCT)
+        df = apply_window_transform(df, cols_transform, time_col, window, overlap, dct)
 
-        # take mean of overlap regions
-        # df = df.groupby(level=["geoid",time_col], as_index=True).mean()
-        df_reproj_lst = []
-        for df_cut in idct_lst:
-            df_cut = df_cut.sort_index()
-            igft_lst = []
-            # igft
-            for t in df_cut.index.get_level_values(time_col).unique():
-                df_t = df_cut[df_cut.index.get_level_values(time_col) == t]  
-                df_igft_t = gft_eigvecs @ df_t[cols_transform]
-                df_igft_t.index = df_t.index
-                igft_lst.append(df_igft_t)
-            df_reproj_lst.append(pd.concat(igft_lst, axis=0))
+        # Apply Inverse Discrete Cosine Transform (IDCT)
+        idct_lst = apply_window_transform(df, cols_transform, time_col, window, overlap, idct)
 
-        df_reproj = pd.concat(df_reproj_lst, axis=0)
-        df = df_reproj.groupby(level=["geoid",time_col], as_index=True).mean()
-
-        # for samp in df_gft.index:
-        #     df_samp = df_gft.loc[samp]
-        #     cols_transform = [[spaceenv.treatment] + spaceenv.covariates + [spaceenv.outcome]]
-        #     df_transform = pd.DataFrame({colnm: np.fft.dct(df_samp[colnm]) for colnm in cols_transform})
+        # Apply Inverse Graph Fourier Transform (IGFT)
+        df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, cols_transform, time_col) for df_cut in idct_lst]
+        df = pd.concat(df_reproj_lst, axis=0).groupby(level=["geoid", time_col]).mean()
 
     # fill missing if needed
     if spaceenv.fill_missing_covariate_values:
