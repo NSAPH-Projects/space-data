@@ -48,6 +48,7 @@ def main(cfg: DictConfig):
     output_dir = "."  # hydra automatically sets this for this script since
     st_transform = spaceenv.st_transform.do_st_transform
     time_col = spaceenv.st_transform.time_col
+    space_col = "geoid"
     window = spaceenv.st_transform.window_size
     overlap = spaceenv.st_transform.overlap
     # the config option hydra.job.chdir is true
@@ -87,8 +88,8 @@ def main(cfg: DictConfig):
 
     # remove duplicate indices
     if st_transform:
-        df["geoid"] = df.index
-        dupl = df.duplicated(subset=["geoid", time_col], 
+        df[space_col] = df.index
+        dupl = df.duplicated(subset=[space_col, time_col], 
                              keep="first")
     else:
         dupl = df.index.duplicated(keep="first")
@@ -98,7 +99,7 @@ def main(cfg: DictConfig):
 
     # remove counties that are only present for some years, enforce constant graph
     if st_transform:
-        valid_geoids = df.groupby("geoid")[time_col].transform("nunique") == df[time_col].nunique()
+        valid_geoids = df.groupby(space_col)[time_col].transform("nunique") == df[time_col].nunique()
         df = df[valid_geoids]
     
     tmp = df.shape[0]
@@ -144,7 +145,7 @@ def main(cfg: DictConfig):
     # maintain only covariates, treatment, and outcome
     tmp = df.shape[1]
     if spaceenv.st_transform.do_st_transform:
-        df = df[["geoid", time_col] + [spaceenv.treatment] + covariates + [spaceenv.outcome]]
+        df = df[[space_col, time_col] + [spaceenv.treatment] + covariates + [spaceenv.outcome]]
         #df = df.reset_index().sort_values(by=["county", "year"]).set_index("county")
     else:
         df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
@@ -267,12 +268,16 @@ def main(cfg: DictConfig):
             gft_lst.append(df_gft_t)
         return pd.concat(gft_lst, axis=0).sort_index()
 
-    def apply_window_transform(df, cols_transform, time_col, window, overlap, transform_func):
+    def apply_window_transform(df, time_col, window, overlap, transform_func, cols_transform=None):
         """Applies a windowed transformation (DCT or IDCT) across time."""
         min_t = df.index.get_level_values(time_col).min()
         max_t = df.index.get_level_values(time_col).max() + 1
         window_idx = 0
         transformed_lst = []
+        if not cols_transform:
+            cols_transform = df.columns
+            if "window_idx" in cols_transform:
+                cols_transform.remove("window_idx")
 
         curr_min, curr_max = min_t, min_t + window
         while curr_min < max_t:
@@ -302,24 +307,39 @@ def main(cfg: DictConfig):
         else:
             return pd.concat(transformed_lst, axis=0).sort_index()
 
-    def apply_igft(df, gft_eigvecs, cols_transform, time_col):
+    def apply_igft(df, gft_eigvecs, time_col, cols_transform=None):
         """Applies Inverse Graph Fourier Transform (IGFT) to each time slice."""
         igft_lst = []
+        if not cols_transform:
+            cols_transform = df.columns
+            if "window_idx" in cols_transform:
+                cols_transform.remove("window_idx")
         # iterate through time
         for t in df.index.get_level_values(time_col).unique():
-            df_t = df[df.index.get_level_values(time_col) == t] # filter time
+            df_t = df[df.index.get_level_values(time_col) == t].sort_index(level=space_col) # filter time
             df_igft_t = gft_eigvecs @ df_t[cols_transform] # apply transform
             df_igft_t.index = df_t.index # sync index
             igft_lst.append(df_igft_t)
         return pd.concat(igft_lst, axis=0)
 
+    def apply_inverse_transform(df, time_col, window, overlap, gft_eigvecs, cols_transform=None):
+        # Apply Inverse Discrete Cosine Transform (IDCT)
+        idct_lst = apply_window_transform(df, time_col, window, overlap, idct, cols_transform=cols_transform)
+        # Apply Inverse Graph Fourier Transform (IGFT)
+        df_reproj_lst = [apply_igft(df_cut, 
+                                    gft_eigvecs, 
+                                    time_col, 
+                                    cols_transform=cols_transform) for df_cut in idct_lst]
+        # average overlapping windows and return
+        return(pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean())
+
     # --- Main Processing ---
 
     if spaceenv.st_transform:
         # Enforcing same GFT for each year
-        df = df.set_index(["geoid", time_col]).sort_index()
+        df = df.set_index([space_col, time_col]).sort_index()
         df_orig = df
-        gft_nodelist = df.index.get_level_values("geoid").unique()
+        gft_nodelist = df.index.get_level_values(space_col).unique()
         cols_transform = [spaceenv.treatment] + covariates + [spaceenv.outcome]
         _, gft_eigvecs = gft(graph, gft_nodelist)
 
@@ -327,14 +347,16 @@ def main(cfg: DictConfig):
         df = apply_gft(df, gft_eigvecs, cols_transform, time_col)
 
         # Apply Discrete Cosine Transform (DCT)
-        df = apply_window_transform(df, cols_transform, time_col, window, overlap, dct)
+        df = apply_window_transform(df, time_col, window, overlap, dct, cols_transform=cols_transform)
 
-        # Apply Inverse Discrete Cosine Transform (IDCT)
-        idct_lst = apply_window_transform(df, cols_transform, time_col, window, overlap, idct)
 
-        # Apply Inverse Graph Fourier Transform (IGFT)
-        df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, cols_transform, time_col) for df_cut in idct_lst]
-        df = pd.concat(df_reproj_lst, axis=0).groupby(level=["geoid", time_col]).mean()
+        df = apply_inverse_transform(df, time_col, window, overlap, gft_eigvecs, cols_transform=cols_transform)
+        # # Apply Inverse Discrete Cosine Transform (IDCT)
+        # idct_lst = apply_window_transform(df, time_col, window, overlap, idct, cols_transform=cols_transform)
+
+        # # Apply Inverse Graph Fourier Transform (IGFT)
+        # df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, time_col, cols_transform=cols_transform) for df_cut in idct_lst]
+        # df = pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean()
 
     # fill missing if needed
     if spaceenv.fill_missing_covariate_values:
@@ -433,6 +455,26 @@ def main(cfg: DictConfig):
     ]
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
+
+        # IF SPATIOTEMPORAL THEN RETRANSFORM
+    if st_transform:
+        # first reproject
+        X_ft = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
+        df_ft = pd.concat([A, X_ft, Y_synth])
+        print("hi")
+
+        # Apply Inverse Discrete Cosine Transform (IDCT)
+        idct_lst = apply_window_transform(df, cols_transform, time_col, window, overlap, idct)
+
+        # Apply Inverse Graph Fourier Transform (IGFT)
+        df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, cols_transform, time_col) for df_cut in idct_lst]
+        df = pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean()
+
+
+    logging.info(f"Saving synthetic data, graph, and metadata")
+    X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
+    dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
+
 
     # model leaderboard from autogluon results
     results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
@@ -609,15 +651,6 @@ def main(cfg: DictConfig):
         moran_I_values[c] = utils.moran_I(df[c].values, edge_list)
 
     # === Save results ===
-    # IF SPATIOTEMPORAL THEN RETRANSFORM
-    if st_transform:
-        # first reproject 
-        print("hi")
-
-
-    logging.info(f"Saving synthetic data, graph, and metadata")
-    X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
-    dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
 
     # whens saving synthetic data, respect the original data format
     if data_file.endswith("tab"):
