@@ -25,6 +25,8 @@ spaceenv:
     treatment:   # log, symlog, logit
     covariates:
 
+  comp_feat_imp: true
+
   fill_missing_covariate_values: true  # on covariates
   
   # augmentations for the treatment
@@ -53,6 +55,10 @@ spaceenv:
     init_frac: 0.03  # usually 50-70% train with 2=levels+buffer
     levels: 1  # number of neighbors of tune points to include
     buffer: 1  # distance in levels to include around tune points
+
+  # only applicable if doing st transform
+  nonspatial_tuning:
+    tuning_frac: 0.2
 
   treatment_quantile_valid_range: [0.025, 0.975]
   outcome_quantile_valid_range: [0.01, 0.99]

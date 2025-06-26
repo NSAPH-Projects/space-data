@@ -14,11 +14,96 @@ from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import seed_everything
 from scipy.interpolate import BSpline
 from scipy.linalg import eigh
-from scipy.sparse.linalg import eigsh
 from scipy.fft import dct, idct
 
 import utils
 
+
+# performing graph fourier transform, data in spectral domain
+def apply_gft(df, gft_eigvecs, cols_transform, space_col, time_col):
+    """Applies Graph Fourier Transform (GFT) to each time slice."""
+    gft_lst = []
+    # iterate through time slice
+    for t in df.index.get_level_values(time_col).unique():
+        df_t = df[df.index.get_level_values(time_col) == t].sort_index(level=space_col) # filter df
+        df_gft_t = gft_eigvecs.T @ df_t[cols_transform] # apply gft
+        df_gft_t.index = df_t.index # synchronize index
+        gft_lst.append(df_gft_t)
+    return pd.concat(gft_lst, axis=0).sort_index()
+
+def apply_window_transform(df, space_col, time_col, window, overlap, transform_func, cols_transform=None):
+    """Applies a windowed transformation (DCT or IDCT) across time."""
+    min_t = df.index.get_level_values(time_col).min()
+    max_t = df.index.get_level_values(time_col).max() + 1
+    window_idx = 0
+    transformed_lst = []
+    if not cols_transform:
+        cols_transform = list(df.columns)
+
+    curr_min, curr_max = min_t, min_t + window
+    while curr_min < max_t:
+        # Filter for time slots within the current window
+        df_window = df[(df.index.get_level_values(time_col) >= curr_min) & 
+                    (df.index.get_level_values(time_col) < curr_max)]
+        # Extra filtering for IDCT
+        if transform_func == idct:
+            df_window = df_window[df_window.index.get_level_values("window_idx") == window_idx]
+        else: # establish window part of index
+            df_window["window_idx"] = window_idx
+            df_window = df_window.reset_index().set_index([space_col, time_col, "window_idx"])
+        
+        # Apply transform to each column
+        df_transformed_w = pd.DataFrame({colnm: transform_func(np.array(df_window[colnm]), norm="ortho", type=2)
+                                        for colnm in cols_transform})
+        df_transformed_w.index = df_window.index
+
+        transformed_lst.append(df_transformed_w.sort_index())
+
+        # Update window position
+        if curr_max > max_t:
+            break
+        curr_min = curr_max - overlap
+        curr_max = curr_max - overlap + window
+        window_idx += 1
+
+    if transform_func == idct:
+        return transformed_lst
+    else:
+        return pd.concat(transformed_lst, axis=0).sort_index()
+
+def apply_igft(df, gft_eigvecs, space_col, time_col, cols_transform=None):
+    """Applies Inverse Graph Fourier Transform (IGFT) to each time slice."""
+    igft_lst = []
+    if not cols_transform:
+        cols_transform = list(df.columns)
+
+    df = df.reset_index().drop("window_idx", axis=1).set_index([space_col, time_col])
+    # iterate through time
+    for t in df.index.get_level_values(time_col).unique():
+        df_t = df[df.index.get_level_values(time_col) == t].sort_index(level=space_col) # filter time
+        df_igft_t = gft_eigvecs @ df_t[cols_transform] # apply transform
+        df_igft_t.index = df_t.index # sync index
+        igft_lst.append(df_igft_t)
+    return pd.concat(igft_lst, axis=0)
+
+def apply_inverse_transform(df, 
+                            gft_eigvecs, 
+                            space_col, 
+                            time_col, 
+                            window, 
+                            overlap,
+                            cols_transform=None):
+    df = pd.DataFrame(df)
+    # Apply Inverse Discrete Cosine Transform (IDCT)
+    idct_lst = apply_window_transform(df, space_col, time_col, window, overlap, idct, cols_transform=cols_transform)
+    # Apply Inverse Graph Fourier Transform (IGFT)
+    df_reproj_lst = [apply_igft(df_cut, 
+                                gft_eigvecs, 
+                                space_col,
+                                time_col,
+                                cols_transform=cols_transform) for df_cut in idct_lst]
+    # average overlapping windows and return
+    return(pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean())
 
 def gft(graph, nodelist):
     # Step 1: Extract adjacency matrix (binary 0/1)
@@ -87,7 +172,7 @@ def main(cfg: DictConfig):
         raise ValueError(f"Unknown file extension in {data_file}.")
 
     # remove duplicate indices
-    if st_transform:
+    if time_col:
         df[space_col] = df.index
         dupl = df.duplicated(subset=[space_col, time_col], 
                              keep="first")
@@ -144,9 +229,8 @@ def main(cfg: DictConfig):
 
     # maintain only covariates, treatment, and outcome
     tmp = df.shape[1]
-    if spaceenv.st_transform.do_st_transform:
+    if time_col:
         df = df[[space_col, time_col] + [spaceenv.treatment] + covariates + [spaceenv.outcome]]
-        #df = df.reset_index().sort_values(by=["county", "year"]).set_index("county")
     else:
         df = df[[spaceenv.treatment] + covariates + [spaceenv.outcome]]
     logging.info(f"Removed {tmp - df.shape[1]}/{tmp} columns due to covariate choice.")
@@ -249,93 +333,18 @@ def main(cfg: DictConfig):
     logging.info(f"Homegenizing data and graph")
     logging.info(f"...{perc:.2f}% of the data rows (n={n}) found in graph nodes.")
     graph = nx.subgraph(graph, intersection)
-    df = df.loc[list(intersection)]
+    df = df.loc[list(intersection)].sort_index()
 
     # obtain final edge list
     node2ix = {n: i for i, n in enumerate(df.index)}
     edge_list = np.array([(node2ix[e[0]], node2ix[e[1]]) for e in graph.edges])
-    
-
-    # performing graph fourier transform, data in spectral domain
-    def apply_gft(df, gft_eigvecs, cols_transform, time_col):
-        """Applies Graph Fourier Transform (GFT) to each time slice."""
-        gft_lst = []
-        # iterate through time slice
-        for t in df.index.get_level_values(time_col).unique():
-            df_t = df[df.index.get_level_values(time_col) == t] # filter df
-            df_gft_t = gft_eigvecs.T @ df_t[cols_transform] # apply gft
-            df_gft_t.index = df_t.index # synchronize index
-            gft_lst.append(df_gft_t)
-        return pd.concat(gft_lst, axis=0).sort_index()
-
-    def apply_window_transform(df, time_col, window, overlap, transform_func, cols_transform=None):
-        """Applies a windowed transformation (DCT or IDCT) across time."""
-        min_t = df.index.get_level_values(time_col).min()
-        max_t = df.index.get_level_values(time_col).max() + 1
-        window_idx = 0
-        transformed_lst = []
-        if not cols_transform:
-            cols_transform = df.columns
-            if "window_idx" in cols_transform:
-                cols_transform.remove("window_idx")
-
-        curr_min, curr_max = min_t, min_t + window
-        while curr_min < max_t:
-            # Filter for time slots within the current window
-            df_window = df[(df.index.get_level_values(time_col) >= curr_min) & 
-                        (df.index.get_level_values(time_col) < curr_max)]
-            # Extra filtering for IDCT
-            if transform_func == idct:
-                df_window = df_window[df_window["window_idx"] == window_idx]
-            
-            # Apply transform to each column
-            df_transformed_w = pd.DataFrame({colnm: transform_func(np.array(df_window[colnm]), norm="ortho", type=2)
-                                            for colnm in cols_transform})
-            df_transformed_w.index = df_window.index
-            df_transformed_w["window_idx"] = window_idx
-            transformed_lst.append(df_transformed_w.sort_index())
-
-            # Update window position
-            if curr_max > max_t:
-                break
-            curr_min = curr_max - overlap
-            curr_max = curr_max - overlap + window
-            window_idx += 1
-
-        if transform_func == idct:
-            return transformed_lst
-        else:
-            return pd.concat(transformed_lst, axis=0).sort_index()
-
-    def apply_igft(df, gft_eigvecs, time_col, cols_transform=None):
-        """Applies Inverse Graph Fourier Transform (IGFT) to each time slice."""
-        igft_lst = []
-        if not cols_transform:
-            cols_transform = df.columns
-            if "window_idx" in cols_transform:
-                cols_transform.remove("window_idx")
-        # iterate through time
-        for t in df.index.get_level_values(time_col).unique():
-            df_t = df[df.index.get_level_values(time_col) == t].sort_index(level=space_col) # filter time
-            df_igft_t = gft_eigvecs @ df_t[cols_transform] # apply transform
-            df_igft_t.index = df_t.index # sync index
-            igft_lst.append(df_igft_t)
-        return pd.concat(igft_lst, axis=0)
-
-    def apply_inverse_transform(df, time_col, window, overlap, gft_eigvecs, cols_transform=None):
-        # Apply Inverse Discrete Cosine Transform (IDCT)
-        idct_lst = apply_window_transform(df, time_col, window, overlap, idct, cols_transform=cols_transform)
-        # Apply Inverse Graph Fourier Transform (IGFT)
-        df_reproj_lst = [apply_igft(df_cut, 
-                                    gft_eigvecs, 
-                                    time_col, 
-                                    cols_transform=cols_transform) for df_cut in idct_lst]
-        # average overlapping windows and return
-        return(pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean())
 
     # --- Main Processing ---
-
-    if spaceenv.st_transform:
+    if time_col and not st_transform:
+        df_orig = df
+        df = df.set_index([space_col, time_col])
+    
+    if st_transform:
         # Enforcing same GFT for each year
         df = df.set_index([space_col, time_col]).sort_index()
         df_orig = df
@@ -344,22 +353,22 @@ def main(cfg: DictConfig):
         _, gft_eigvecs = gft(graph, gft_nodelist)
 
         # Apply GFT
-        df = apply_gft(df, gft_eigvecs, cols_transform, time_col)
+        df = apply_gft(df, gft_eigvecs, cols_transform, space_col, time_col)
 
         # Apply Discrete Cosine Transform (DCT)
-        df = apply_window_transform(df, time_col, window, overlap, dct, cols_transform=cols_transform)
+        df = apply_window_transform(df, space_col, time_col, window, overlap, dct, cols_transform=cols_transform)
 
+        df = df.reset_index().set_index([space_col, time_col, "window_idx"]).sort_index()
+        # check for perfect reconstruction
+        # df = apply_inverse_transform(df, 
+        #                              time_col=time_col,
+        #                              space_col=space_col, 
+        #                              window=window, 
+        #                              overlap=overlap, 
+        #                              gft_eigvecs=gft_eigvecs, 
+        #                              cols_transform=cols_transform)
 
-        df = apply_inverse_transform(df, time_col, window, overlap, gft_eigvecs, cols_transform=cols_transform)
-        # # Apply Inverse Discrete Cosine Transform (IDCT)
-        # idct_lst = apply_window_transform(df, time_col, window, overlap, idct, cols_transform=cols_transform)
-
-        # # Apply Inverse Graph Fourier Transform (IGFT)
-        # df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, time_col, cols_transform=cols_transform) for df_cut in idct_lst]
-        # df = pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean()
-
-    # fill missing if needed
-    if spaceenv.fill_missing_covariate_values:
+    # fill missing if need    if spaceenv.fill_missing_covariate_values:
         for c in covariates:
             col_vals = df[c].values
             frac_missing = np.isnan(col_vals).mean()
@@ -375,12 +384,20 @@ def main(cfg: DictConfig):
     train_data = TabularDataset(dftrain)
 
     # == Spatial Train/Test Split ===
-    tuning_nodes, buffer_nodes = utils.spatial_train_test_split(
-        graph,
-        init_frac=spaceenv.spatial_tuning.init_frac,
-        levels=spaceenv.spatial_tuning.levels,
-        buffer=spaceenv.spatial_tuning.buffer,
-    )
+    if not st_transform:
+        tuning_nodes, buffer_nodes = utils.spatial_train_test_split(
+            graph,
+            init_frac=spaceenv.spatial_tuning.init_frac,
+            levels=spaceenv.spatial_tuning.levels,
+            buffer=spaceenv.spatial_tuning.buffer,
+        )
+        if time_col:
+            tuning_nodes = df.index[df.index.get_level_values(space_col).isin(tuning_nodes)]
+            buffer_nodes = df.index[df.index.get_level_values(space_col).isin(buffer_nodes)]
+    else:
+        num_tune = int(len(df)*int(spaceenv.nonspatial_tuning.tuning_frac))
+        tuning_nodes = df.sample(n=num_tune).index
+        buffer_nodes = tuning_nodes
 
     tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)])
     train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)])
@@ -456,31 +473,55 @@ def main(cfg: DictConfig):
     Y_cf = mu_cf + synth_residuals[:, None]
     Y_cf.columns = [f"Y_synth_{i:02d}" for i in range(len(mu_cf.columns))]
 
-        # IF SPATIOTEMPORAL THEN RETRANSFORM
-    if st_transform:
-        # first reproject
-        X_ft = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
-        df_ft = pd.concat([A, X_ft, Y_synth])
-        print("hi")
-
-        # Apply Inverse Discrete Cosine Transform (IDCT)
-        idct_lst = apply_window_transform(df, cols_transform, time_col, window, overlap, idct)
-
-        # Apply Inverse Graph Fourier Transform (IGFT)
-        df_reproj_lst = [apply_igft(df_cut, gft_eigvecs, cols_transform, time_col) for df_cut in idct_lst]
-        df = pd.concat(df_reproj_lst, axis=0).groupby(level=[space_col, time_col]).mean()
-
+    moran_I_values_transf = {}
+    for c in covariates:
+        moran_I_values_transf[c] = utils.moran_I(df[c].values, edge_list)
 
     logging.info(f"Saving synthetic data, graph, and metadata")
+    residuals, synth_residuals = (pd.DataFrame(residuals, index=df.index, columns=["residuals"]), 
+                                pd.DataFrame(synth_residuals, index=df.index, columns=["synth_residuals"]))
     X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
+    
+    # IF SPATIOTEMPORAL THEN RETRANSFORM
+    if st_transform:
+        df_full_preft = pd.concat([pd.DataFrame(A), X, 
+                                   pd.DataFrame(mu), mu_cf, 
+                                   pd.DataFrame(Y_synth), Y_cf, 
+                                   residuals, synth_residuals])
+        df_full_preft.to_parquet(f"{output_dir}/data_full_transformed.parquet")
+        dict_ft = {"X": X, 
+                   "A": A, 
+                    "mu": mu, 
+                    "mu_cf": mu_cf, 
+                    "Y_synth": Y_synth, 
+                    "Y_cf": Y_cf, 
+                    "residuals": residuals, 
+                    "synth_residuals": synth_residuals}
+        
+        # applying inverse transform on all vars
+        vars_transformed = {k: apply_inverse_transform(pd.DataFrame(v), 
+                                                       gft_eigvecs=gft_eigvecs,
+                                                       space_col=space_col,
+                                                       time_col=time_col,  
+                                                       window=window,
+                                                       overlap=overlap) for k,v in dict_ft.items()}
+        # extracting values
+        X, A, mu, mu_cf, Y_synth, Y_cf, residuals, synth_residuals = vars_transformed.values()
+    else:
+        X = df[df.columns.difference([spaceenv.outcome, spaceenv.treatment])]
+    
     dfout = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf], axis=1)
-
+    
+    # export file with residuals
+    df_full = pd.concat([A, X, mu, mu_cf, Y_synth, Y_cf, residuals, synth_residuals])
+    residuals, synth_residuals = np.array(residuals.iloc[:, 0]), np.array(synth_residuals.iloc[:, 0])
+    df_full.to_parquet(f"{output_dir}/data_full.parquet")
 
     # model leaderboard from autogluon results
     results["leaderboard"].to_csv(f"{output_dir}/leaderboard.csv", index=False)
 
     logging.info("Plotting counterfactuals and residuals.")
-    ix = np.random.choice(len(df), cfg.num_plot_samples)
+    ix = np.random.choice(len(dfout), cfg.num_plot_samples)
     cfpred_sample = mu_cf.iloc[ix].values
     fig, ax = plt.subplots(figsize=(4, 3))
     ax.plot(avals, cfpred_sample.T, color="gray", alpha=0.2)
@@ -512,137 +553,138 @@ def main(cfg: DictConfig):
     ax.legend()
     fig.savefig(f"{output_dir}/residuals.png", dpi=300, bbox_inches="tight")
 
-    # === Compute feature importance ===
-    logging.info(f"Computing feature importance.")
-    featimp = predictor.feature_importance(
-        train_data,
-        **training_cfg.feat_importance,
-    )
-    # convert the .importance column to dict
-    featimp = dict(featimp.importance)
+    if spaceenv.comp_feat_imp:
+        # === Compute feature importance ===
+        logging.info(f"Computing feature importance.")
+        featimp = predictor.feature_importance(
+            train_data,
+            **training_cfg.feat_importance,
+        )
+        # convert the .importance column to dict
+        featimp = dict(featimp.importance)
 
-    if not is_binary_treatment and spaceenv.bsplines:
-        # this is the case when we want to merge the scores of all splines
-        # of the treat  ment into a single score. We can use max aggregation
-        tname = spaceenv.treatment
-        for c in extra_colnames:
-            featimp[tname] = max(featimp.get(tname, 0.0), featimp.get(c, 0.0))
-            if c in featimp:
-                featimp.pop(c)
-    elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
-        # this is the case when we want to merge interacted covariates
-        # with the treatment. We can use max aggregation strategy.
-        for c in covariates:
-            featimp[c] = max(featimp.get(c, 0.0), featimp.get(c + "_interact", 0.0))
-            if c + "_interact" in featimp:
-                featimp.pop(c + "_interact")
+        if not is_binary_treatment and spaceenv.bsplines:
+            # this is the case when we want to merge the scores of all splines
+            # of the treat  ment into a single score. We can use max aggregation
+            tname = spaceenv.treatment
+            for c in extra_colnames:
+                featimp[tname] = max(featimp.get(tname, 0.0), featimp.get(c, 0.0))
+                if c in featimp:
+                    featimp.pop(c)
+        elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+            # this is the case when we want to merge interacted covariates
+            # with the treatment. We can use max aggregation strategy.
+            for c in covariates:
+                featimp[c] = max(featimp.get(c, 0.0), featimp.get(c + "_interact", 0.0))
+                if c + "_interact" in featimp:
+                    featimp.pop(c + "_interact")
 
-    # yscale = np.nanstd(df[spaceenv.outcome])
-    # replace with synthetic outcome standard deviation
-    # yscale = np.nanstd(Y_synth)
-    treat_imp = featimp[spaceenv.treatment]
-    featimp = {c: float(featimp.get(c, 0.0)) / scale for c in covariates}
-    featimp["treatment"] = treat_imp
+        # yscale = np.nanstd(df[spaceenv.outcome])
+        # replace with synthetic outcome standard deviation
+        # yscale = np.nanstd(Y_synth)
+        treat_imp = featimp[spaceenv.treatment]
+        featimp = {c: float(featimp.get(c, 0.0)) / scale for c in covariates}
+        featimp["treatment"] = treat_imp
 
-    # === Fitting model to treatment variable for confounding score ===
-    logging.info(f"Fitting model to treatment variable for importance score.")
-    treat_trainer = TabularPredictor(label=spaceenv.treatment)
-    cols = covariates + [spaceenv.treatment]
-    treat_tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)][cols])
-    treat_train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)][cols])
-    treat_predictor = treat_trainer.fit(
-        treat_train_data,
-        **training_cfg.fit,
-        tuning_data=treat_tuning_data,
-        use_bag_holdout=True,
-        hyperparameters=hpars,
-    )
-    treat_predictor.refit_full()
-
-    # normalize feature importance by scale
-    tscale = np.nanstd(df[spaceenv.treatment])
-    treat_featimp = treat_predictor.feature_importance(
-        treat_train_data, **training_cfg.feat_importance
-    )
-    treat_featimp = dict(treat_featimp.importance)
-
-    # do the reduction for the case of interactions
-    if is_binary_treatment and spaceenv.binary_treatment_iteractions:
-        for c in covariates:
-            treat_featimp[c] = max(
-                treat_featimp.get(c, 0.0), treat_featimp.get(c + "_interact", 0.0)
-            )
-            if c + "_interact" in treat_featimp:
-                treat_featimp.pop(c + "_interact")
-
-    treat_featimp = {c: float(treat_featimp.get(c, 0.0)) / tscale for c in covariates}
-
-    # legacy confounding score by inimum
-    cs_minimum = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
-    logging.info(f"Legacy conf. score by minimum:\n{cs_minimum}")
-
-    # === Compute confounding scores ===
-    # The strategy for confounding scores is to compute various types
-    # using the baseline model.
-
-    # For continous treatment compute the ERF and ITE scores
-    # For categorical treatmetn additionally compute the ATE score
-    # For both also use the minimum of the treatment and outcome model
-    # As in the first version of the paper.
-
-    # For comparability across environments, we divide the scores by the
-    # variance of the synthetic outcome.
-
-    # Obtain counterfactuals for the others
-    cs_erf = {}
-    cs_ite = {}
-    cs_ate = {}  # will be empty if not binary
-
-    for i, g in enumerate(covar_groups):
-        key_ = list(g.keys())[0] if isinstance(g, dict) else g
-        value_ = list(g.values())[0] if isinstance(g, dict) else [g]
-        cols = dftrain.columns.difference(value_)
-        leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
-        leave_out_predictor = leave_out_predictor.fit(
-            train_data[cols],
-            **spaceenv.autogluon.leave_out_fit,
-            tuning_data=tuning_data[cols],
+        # === Fitting model to treatment variable for confounding score ===
+        logging.info(f"Fitting model to treatment variable for importance score.")
+        treat_trainer = TabularPredictor(label=spaceenv.treatment)
+        cols = covariates + [spaceenv.treatment]
+        treat_tuning_data = TabularDataset(dftrain[dftrain.index.isin(tuning_nodes)][cols])
+        treat_train_data = TabularDataset(dftrain[~dftrain.index.isin(buffer_nodes)][cols])
+        treat_predictor = treat_trainer.fit(
+            treat_train_data,
+            **training_cfg.fit,
+            tuning_data=treat_tuning_data,
             use_bag_holdout=True,
             hyperparameters=hpars,
         )
-        leave_out_predictor.refit_full()
+        treat_predictor.refit_full()
 
-        leave_out_mu_cf = []
-        for a in avals:
-            cfdata = df[cols].copy()
-            cfdata[spaceenv.treatment] = a
+        # normalize feature importance by scale
+        tscale = np.nanstd(df[spaceenv.treatment])
+        treat_featimp = treat_predictor.feature_importance(
+            treat_train_data, **training_cfg.feat_importance
+        )
+        treat_featimp = dict(treat_featimp.importance)
 
-            if not is_binary_treatment and spaceenv.bsplines:
-                t_a_pct = np.full((n,), get_t_pct(a))
-                extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
-                cfdata[extra_colnames] = extra_cols
-            elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
-                extra_cols = df[covariates].values * a
-                cfdata[extra_colnames] = extra_cols
+        # do the reduction for the case of interactions
+        if is_binary_treatment and spaceenv.binary_treatment_iteractions:
+            for c in covariates:
+                treat_featimp[c] = max(
+                    treat_featimp.get(c, 0.0), treat_featimp.get(c + "_interact", 0.0)
+                )
+                if c + "_interact" in treat_featimp:
+                    treat_featimp.pop(c + "_interact")
 
-            predicted = leave_out_predictor.predict(TabularDataset(cfdata))
-            leave_out_mu_cf.append(predicted)
-        leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+        treat_featimp = {c: float(treat_featimp.get(c, 0.0)) / tscale for c in covariates}
 
-        logging.info(f"[{i + 1} / {len(covar_groups)}]: {key_}")
+        # legacy confounding score by inimum
+        cs_minimum = {k: min(treat_featimp[k], featimp[k]) for k in covariates}
+        logging.info(f"Legacy conf. score by minimum:\n{cs_minimum}")
 
-        # compute loss normalized by the variance of the outcome
-        cf_err = (leave_out_mu_cf.values - mu_cf.values) / scale
-        cs_ite[key_] = float(np.sqrt((cf_err**2).mean(0)).mean())
-        logging.info(f"ITE: {cs_ite[key_]:.3f}")
+        # === Compute confounding scores ===
+        # The strategy for confounding scores is to compute various types
+        # using the baseline model.
 
-        erf_err = (leave_out_mu_cf.values - mu_cf.values).mean(0) / scale
-        cs_erf[key_] = float(np.abs(erf_err).mean())
-        logging.info(f"ERF: {cs_erf[key_]:.3f}")
+        # For continous treatment compute the ERF and ITE scores
+        # For categorical treatmetn additionally compute the ATE score
+        # For both also use the minimum of the treatment and outcome model
+        # As in the first version of the paper.
 
-        if n_treatment_values == 2:
-            cs_ate[key_] = np.abs(erf_err[1] - erf_err[0])
-            logging.info(f"ATE: {cs_ate[key_]:.3f}")
+        # For comparability across environments, we divide the scores by the
+        # variance of the synthetic outcome.
+
+        # Obtain counterfactuals for the others
+        cs_erf = {}
+        cs_ite = {}
+        cs_ate = {}  # will be empty if not binary
+
+        for i, g in enumerate(covar_groups):
+            key_ = list(g.keys())[0] if isinstance(g, dict) else g
+            value_ = list(g.values())[0] if isinstance(g, dict) else [g]
+            cols = dftrain.columns.difference(value_)
+            leave_out_predictor = TabularPredictor(label=spaceenv.outcome)
+            leave_out_predictor = leave_out_predictor.fit(
+                train_data[cols],
+                **spaceenv.autogluon.leave_out_fit,
+                tuning_data=tuning_data[cols],
+                use_bag_holdout=True,
+                hyperparameters=hpars,
+            )
+            leave_out_predictor.refit_full()
+
+            leave_out_mu_cf = []
+            for a in avals:
+                cfdata = df[cols].copy()
+                cfdata[spaceenv.treatment] = a
+
+                if not is_binary_treatment and spaceenv.bsplines:
+                    t_a_pct = np.full((n,), get_t_pct(a))
+                    extra_cols = np.stack([s(t_a_pct) for s in spline_basis], axis=1)
+                    cfdata[extra_colnames] = extra_cols
+                elif is_binary_treatment and spaceenv.binary_treatment_iteractions:
+                    extra_cols = df[covariates].values * a
+                    cfdata[extra_colnames] = extra_cols
+
+                predicted = leave_out_predictor.predict(TabularDataset(cfdata))
+                leave_out_mu_cf.append(predicted)
+            leave_out_mu_cf = pd.concat(leave_out_mu_cf, axis=1)
+
+            logging.info(f"[{i + 1} / {len(covar_groups)}]: {key_}")
+
+            # compute loss normalized by the variance of the outcome
+            cf_err = (leave_out_mu_cf.values - mu_cf.values) / scale
+            cs_ite[key_] = float(np.sqrt((cf_err**2).mean(0)).mean())
+            logging.info(f"ITE: {cs_ite[key_]:.3f}")
+
+            erf_err = (leave_out_mu_cf.values - mu_cf.values).mean(0) / scale
+            cs_erf[key_] = float(np.abs(erf_err).mean())
+            logging.info(f"ERF: {cs_erf[key_]:.3f}")
+
+            if n_treatment_values == 2:
+                cs_ate[key_] = np.abs(erf_err[1] - erf_err[0])
+                logging.info(f"ATE: {cs_ate[key_]:.3f}")
 
     # === Compute the spatial smoothness of each covariate
     logging.info(f"Computing spatial smoothness of each covariate.")
@@ -675,26 +717,42 @@ def main(cfg: DictConfig):
             coords.to_parquet("graph/coords.parquet")
             tar.add("graph/")
 
-    metadata = {
-        "base_name": f"{spaceenv.base_name}",
-        "treatment": spaceenv.treatment,
-        "predicted_outcome": spaceenv.outcome,
-        "synthetic_outcome": "Y_synth",
-        "confounding_score": utils.sort_dict(cs_minimum),
-        "confounding_score_erf": utils.sort_dict(cs_erf),
-        "confounding_score_ite": utils.sort_dict(cs_ite),
-        "confounding_score_ate": utils.sort_dict(cs_ate),
-        "spatial_scores": utils.sort_dict(moran_I_values),
-        "outcome_importance": utils.sort_dict(featimp),
-        "treatment_importance": utils.sort_dict(treat_featimp),
-        "covariates": list(covariates),
-        "treatment_values": avals.tolist(),
-        "covariate_groups": covar_groups,
-        "original_residual_spatial_score": float(residual_smoothness),
-        "synthetic_residual_spatial_score": float(synth_residual_smoothness),
-        "original_nbrs_corr": float(residual_nbrs_corr),
-        "synthetic_nbrs_corr": float(synth_residual_nbrs_corr),
-    }
+    if spaceenv.comp_feat_imp:
+        metadata = {
+            "base_name": f"{spaceenv.base_name}",
+            "treatment": spaceenv.treatment,
+            "predicted_outcome": spaceenv.outcome,
+            "synthetic_outcome": "Y_synth",
+            "confounding_score": utils.sort_dict(cs_minimum),
+            "confounding_score_erf": utils.sort_dict(cs_erf),
+            "confounding_score_ite": utils.sort_dict(cs_ite),
+            "confounding_score_ate": utils.sort_dict(cs_ate),
+            "spatial_scores": utils.sort_dict(moran_I_values),
+            "outcome_importance": utils.sort_dict(featimp),
+            "treatment_importance": utils.sort_dict(treat_featimp),
+            "covariates": list(covariates),
+            "treatment_values": avals.tolist(),
+            "covariate_groups": covar_groups,
+            "original_residual_spatial_score": float(residual_smoothness),
+            "synthetic_residual_spatial_score": float(synth_residual_smoothness),
+            "original_nbrs_corr": float(residual_nbrs_corr),
+            "synthetic_nbrs_corr": float(synth_residual_nbrs_corr),
+        }
+    else:
+        metadata = {
+            "base_name": f"{spaceenv.base_name}",
+            "treatment": spaceenv.treatment,
+            "predicted_outcome": spaceenv.outcome,
+            "synthetic_outcome": "Y_synth",
+            "spatial_scores": utils.sort_dict(moran_I_values),
+            "covariates": list(covariates),
+            "treatment_values": avals.tolist(),
+            "covariate_groups": covar_groups,
+            "original_residual_spatial_score": float(residual_smoothness),
+            "synthetic_residual_spatial_score": float(synth_residual_smoothness),
+            "original_nbrs_corr": float(residual_nbrs_corr),
+            "synthetic_nbrs_corr": float(synth_residual_nbrs_corr),
+        }
 
     # save metadata and resolved config
     with open(f"{output_dir}/metadata.yaml", "w") as f:
