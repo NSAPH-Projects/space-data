@@ -116,10 +116,11 @@ def main(cfg: DictConfig):
     shutil.copy(f"{train_dir}/leaderboard.csv", contents_dir)
     shutil.copy(f"{train_dir}/counterfactuals.png", contents_dir)
     shutil.copy(f"{train_dir}/.hydra/config.yaml", f"{contents_dir}/config.yaml")
-    # get ext from filename "{train_dir}/graph*"
+
+    # get ext from filename "{train_dir}/graph.*"
     ext = None
     for f in files:
-        if "graph" in f:
+        if "graph." in f:
             ext = ".".join(f.split(".")[1:])
             break
     if ext is None:
